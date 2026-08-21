@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    -webkit-font-smoothing: antialiased;
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  }
+}
+
+.num {
+  font-feature-settings: "tnum";
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 8px;
+}
+
+/* Print Stylesheet Optimization */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm;
+  }
+
+  body {
+    background: white !important;
+    color: #0f172a !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Hide header, navigation tabs, buttons, and inactive views */
+  .no-print, nav, button, input[type="file"], .tab-rail {
+    display: none !important;
+  }
+
+  /* Ensure only the report page print container is displayed */
+  .print-only-active {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+  }
+
+  /* Prevent page breaks inside critical report blocks */
+  .avoid-break {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .avoid-break-after {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  /* Compact spacing for print */
+  .print-compact-space {
+    margin-bottom: 0.75rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  .print-chart {
+    height: 190px !important;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}

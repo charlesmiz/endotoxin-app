@@ -1,0 +1,7 @@
+{
+  "name": "Endotoxin Assay Calibration Tool",
+  "description": "Comprehensive calibration, commercial fluid estimation, and phenoloxidase kinetic assay validation tool for Archachatina marginata hemolymph endotoxin research.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
