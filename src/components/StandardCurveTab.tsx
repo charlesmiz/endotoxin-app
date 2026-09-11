@@ -12,7 +12,6 @@ import {
   TrendingDown,
   Info,
   RotateCcw,
-  Sparkles,
   Award,
   ChevronDown,
   ChevronUp,
@@ -111,20 +110,20 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
     <div className="space-y-6">
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         {/* Left: Table & Plot */}
-        <div className="xl:col-span-8 bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50/60 gap-2">
+        <div className="xl:col-span-8 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden flex flex-col">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/60 gap-2">
             <div>
-              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight">
+              <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-tight">
                 Coagulation Turbidimetric Standard Curve
               </h2>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
                 Endotoxin concentration vs. Endpoint optical density (A<sub>{coagWavelength}nm</sub>)
               </p>
             </div>
 
             {/* Wavelength selector (documentation only) */}
             <div className="flex items-center gap-2">
-              <label className="text-[11px] font-semibold text-slate-600 flex items-center gap-1.5 bg-white border border-slate-200 px-2 py-0.5 rounded shadow-2xs">
+              <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded shadow-2xs">
                 <span>&lambda; (nm):</span>
                 <input
                   type="number"
@@ -133,12 +132,12 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
                     const val = parseInt(e.target.value, 10);
                     setCoagWavelength(Number.isFinite(val) ? val : 540);
                   }}
-                  className="w-14 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-xs font-mono font-bold text-indigo-700 outline-none text-center focus:ring-1 focus:ring-indigo-500"
+                  className="w-14 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-xs font-mono font-bold text-indigo-700 dark:text-indigo-400 outline-none text-center focus:ring-1 focus:ring-indigo-500"
                   title="Coagulation wavelength in nm (documentation parameter only — pure linear/quadratic regression is applied)"
                 />
               </label>
               <span className="text-xs text-slate-400">|</span>
-              <span className="text-xs text-slate-500 font-medium">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                 {filledPointsCount} point{filledPointsCount !== 1 ? 's' : ''}
               </span>
             </div>
@@ -149,7 +148,7 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-200">
+                    <tr className="text-[11px] uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
                       <th className="text-left pb-2 font-medium">EU/mL</th>
                       <th className="text-left pb-2 font-medium">Abs (OD_{coagWavelength})</th>
                       <th className="text-left pb-2 font-medium">
@@ -158,7 +157,7 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
                       <th className="w-6"></th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {rows.map((row) => (
                       <tr key={row.id}>
                         <td className="py-1.5 pr-2">
@@ -170,7 +169,7 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
                             onChange={(e) =>
                               handleRowChange(row.id, 'eu', e.target.value)
                             }
-                            className="w-full border border-slate-200 bg-slate-50/50 font-mono text-xs text-slate-900 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white"
+                            className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 font-mono text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                           />
                         </td>
                         <td className="py-1.5 pr-2">
@@ -182,7 +181,7 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
                             onChange={(e) =>
                               handleRowChange(row.id, 'abs', e.target.value)
                             }
-                            className="w-full border border-slate-200 bg-slate-50/50 font-mono text-xs text-slate-900 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white"
+                            className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 font-mono text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                           />
                         </td>
                         <td className="py-1.5 pr-2">
@@ -197,13 +196,13 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
                                 e.target.value
                               )
                             }
-                            className="w-full border border-slate-200 bg-slate-50/50 font-mono text-xs text-slate-900 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white"
+                            className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 font-mono text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                           />
                         </td>
                         <td className="py-1.5 text-center">
                           <button
                             onClick={() => handleRemoveRow(row.id)}
-                            className="text-slate-400 hover:text-rose-600 transition p-1 rounded cursor-pointer"
+                            className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition p-1 rounded cursor-pointer"
                             title="Remove row"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -215,26 +214,26 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
                 </table>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100 space-y-3">
+              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={handleAddRow}
-                    className="px-3 py-1.5 rounded-md border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 transition flex items-center gap-1 cursor-pointer"
+                    className="px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center gap-1 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add row
                   </button>
                   {onLoadExample && (
                     <button
                       onClick={onLoadExample}
-                      className="px-3 py-1.5 rounded-md border border-indigo-200 bg-indigo-50/50 text-indigo-700 text-xs font-medium hover:bg-indigo-100/70 transition flex items-center gap-1 cursor-pointer"
+                      className="px-3 py-1.5 rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-medium hover:bg-indigo-100/70 dark:hover:bg-indigo-900/60 transition shadow-2xs cursor-pointer"
                       title="Load example endotoxin standards"
                     >
-                      <Sparkles className="w-3.5 h-3.5" /> Load Example
+                      Load Example
                     </button>
                   )}
                   <button
                     onClick={onClear}
-                    className="px-3 py-1.5 rounded-md border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 transition flex items-center gap-1 cursor-pointer"
+                    className="px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center gap-1 cursor-pointer"
                   >
                     <RotateCcw className="w-3.5 h-3.5" /> Clear
                   </button>
@@ -246,17 +245,17 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
                   </button>
                 </div>
 
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
                   Tip: Include a 0 EU/mL blank to establish optical baseline.
                 </p>
 
                 <div className="grid grid-cols-1 gap-1.5">
-                  <label className="text-[11px] font-medium text-slate-600">
+                  <label className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
                     Calibration Model Fitting
                     <select
                       value={model}
                       onChange={(e) => setModel(e.target.value)}
-                      className="mt-1 w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs bg-white text-slate-800 outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500"
+                      className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-md px-2.5 py-1.5 text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500"
                     >
                       <option value="linear">Linear (OLS: y = mx + c)</option>
                       <option value="quadratic">Quadratic (Polynomial: y = ax² + bx + c)</option>
@@ -269,18 +268,18 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
               </div>
             </div>
 
-            <div className="border-t md:border-t-0 md:border-l border-slate-200 bg-slate-50/30 flex flex-col justify-center p-3">
+            <div className="border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/40 flex flex-col justify-center p-3">
               <PlotlyChart calibration={calibration} height={300} />
             </div>
           </div>
         </div>
 
         {/* Right: Fit Quality & ANOVA Card */}
-        <div className="xl:col-span-4 bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between overflow-hidden">
+        <div className="xl:col-span-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between overflow-hidden">
           <div>
-            <div className="px-5 py-3.5 border-b border-slate-200 bg-slate-50/60 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-slate-800">Fit Quality &amp; Statistics</h2>
-              <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+            <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/60 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">Fit Quality &amp; Statistics</h2>
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
                 {runLabel || 'Run 1'}
               </span>
             </div>
@@ -288,71 +287,71 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
             {/* Banner status */}
             <div className="p-4">
               {!calibration ? (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3.5 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-slate-200/80 text-slate-600 flex items-center justify-center shrink-0">
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3.5 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-slate-200/80 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
                     <MinusCircle className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="text-xs font-semibold text-slate-800">
+                    <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
                       No curve yet
                     </div>
-                    <div className="text-[11px] text-slate-500">
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
                       Enter standards and click compute
                     </div>
                   </div>
                 </div>
               ) : calibration.type === 'quadratic' ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3.5 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <div className="rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/40 p-3.5 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
                     <AlertTriangle className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="text-xs font-semibold text-amber-900">
+                    <div className="text-xs font-semibold text-amber-900 dark:text-amber-200">
                       Exploratory quadratic fit
                     </div>
-                    <div className="text-[11px] text-amber-700">
+                    <div className="text-[11px] text-amber-700 dark:text-amber-400">
                       Nonlinear model active
                     </div>
                   </div>
                 </div>
               ) : calibration.r2 >= 0.9 ? (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3.5 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                <div className="rounded-lg border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/40 p-3.5 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
                     <CheckCircle2 className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="text-xs font-semibold text-emerald-900">
+                    <div className="text-xs font-semibold text-emerald-900 dark:text-emerald-200">
                       Strong linear fit
                     </div>
-                    <div className="text-[11px] text-emerald-700">
+                    <div className="text-[11px] text-emerald-700 dark:text-emerald-400">
                       R² ≥ 0.90 — excellent fit quality
                     </div>
                   </div>
                 </div>
               ) : calibration.r2 >= 0.7 ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3.5 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <div className="rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/40 p-3.5 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
                     <AlertTriangle className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="text-xs font-semibold text-amber-900">
+                    <div className="text-xs font-semibold text-amber-900 dark:text-amber-200">
                       Moderate linear fit
                     </div>
-                    <div className="text-[11px] text-amber-700">
+                    <div className="text-[11px] text-amber-700 dark:text-amber-400">
                       Review scatter plot for curvature
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="rounded-lg border border-rose-200 bg-rose-50 p-3.5 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                <div className="rounded-lg border border-rose-200 dark:border-rose-800/60 bg-rose-50 dark:bg-rose-950/40 p-3.5 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-rose-100 dark:bg-rose-900/60 text-rose-700 dark:text-rose-300 flex items-center justify-center shrink-0">
                     <XCircle className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="text-xs font-semibold text-rose-900">
+                    <div className="text-xs font-semibold text-rose-900 dark:text-rose-200">
                       Weak linear fit
                     </div>
-                    <div className="text-[11px] text-rose-700">
+                    <div className="text-[11px] text-rose-700 dark:text-rose-400">
                       R² &lt; 0.70 — re-check standard readings
                     </div>
                   </div>
@@ -364,24 +363,24 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
             <div className="px-5 space-y-2.5">
               <div className="flex items-center justify-between py-0.5">
                 <div>
-                  <div className="text-xs font-semibold text-slate-800">
+                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
                     R² (Coefficient of Determination)
                   </div>
-                  <div className="text-[10px] text-slate-400">
+                  <div className="text-[10px] text-slate-400 dark:text-slate-500">
                     Linear correlation strength
                   </div>
                 </div>
-                <span className="text-base font-bold font-mono text-emerald-700">
+                <span className="text-base font-bold font-mono text-emerald-700 dark:text-emerald-400">
                   {calibration && Number.isFinite(calibration.r2)
                     ? calibration.r2.toFixed(4)
                     : '—'}
                 </span>
               </div>
-              <div className="h-px bg-slate-100"></div>
+              <div className="h-px bg-slate-100 dark:bg-slate-800"></div>
 
               <div className="flex items-center justify-between py-0.5">
-                <div className="text-xs font-medium text-slate-700">Slope (m)</div>
-                <span className="text-sm font-bold font-mono text-slate-900">
+                <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Slope (m)</div>
+                <span className="text-sm font-bold font-mono text-slate-900 dark:text-slate-100">
                   {calibration
                     ? calibration.type === 'linear'
                       ? calibration.slope?.toFixed(4) ?? '—'
@@ -389,13 +388,13 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
                     : '—'}
                 </span>
               </div>
-              <div className="h-px bg-slate-100"></div>
+              <div className="h-px bg-slate-100 dark:bg-slate-800"></div>
 
               <div className="flex items-center justify-between py-0.5">
-                <div className="text-xs font-medium text-slate-700">
+                <div className="text-xs font-medium text-slate-700 dark:text-slate-300">
                   Intercept (c)
                 </div>
-                <span className="text-sm font-bold font-mono text-slate-900">
+                <span className="text-sm font-bold font-mono text-slate-900 dark:text-slate-100">
                   {calibration
                     ? calibration.type === 'linear'
                       ? calibration.intercept?.toFixed(4) ?? '—'
@@ -403,11 +402,11 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
                     : '—'}
                 </span>
               </div>
-              <div className="h-px bg-slate-100"></div>
+              <div className="h-px bg-slate-100 dark:bg-slate-800"></div>
 
               <div className="flex items-center justify-between py-0.5">
-                <div className="text-xs font-medium text-slate-700">Equation</div>
-                <span className="text-xs font-semibold font-mono text-indigo-700 max-w-[200px] truncate text-right">
+                <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Equation</div>
+                <span className="text-xs font-semibold font-mono text-indigo-700 dark:text-indigo-400 max-w-[200px] truncate text-right">
                   {calibration
                     ? calibration.type === 'linear'
                       ? `y = ${(calibration.slope ?? 0).toFixed(4)}x ${(calibration.intercept ?? 0) >= 0 ? '+' : '−'} ${Math.abs(calibration.intercept ?? 0).toFixed(4)}`
@@ -419,26 +418,26 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
 
             {/* Regression ANOVA Sub-Panel */}
             {calibration && calibration.anova && (
-              <div className="mx-5 mt-3 border border-slate-200 rounded-lg overflow-hidden bg-slate-50/70">
+              <div className="mx-5 mt-3 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden bg-slate-50/70 dark:bg-slate-800/50">
                 <button
                   onClick={() => setShowAnovaDetails(!showAnovaDetails)}
-                  className="w-full px-3 py-2 text-xs font-bold text-slate-800 flex items-center justify-between hover:bg-slate-100/70 transition cursor-pointer"
+                  className="w-full px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between hover:bg-slate-100/70 dark:hover:bg-slate-700/60 transition cursor-pointer"
                 >
-                  <span className="flex items-center gap-1.5 text-indigo-800">
-                    <Award className="w-3.5 h-3.5 text-indigo-600" />
+                  <span className="flex items-center gap-1.5 text-indigo-800 dark:text-indigo-300">
+                    <Award className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                     Regression ANOVA Table
                   </span>
-                  <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                  <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
                     <span>F = {Number.isFinite(calibration.anova.fStat) ? calibration.anova.fStat.toFixed(2) : '—'}</span>
                     {showAnovaDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   </div>
                 </button>
 
                 {showAnovaDetails && (
-                  <div className="p-3 border-t border-slate-200 bg-white text-[11px] space-y-2">
+                  <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] space-y-2">
                     <table className="w-full text-[10px] text-left border-collapse">
                       <thead>
-                        <tr className="border-b border-slate-200 text-slate-500 font-semibold">
+                        <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-semibold">
                           <th className="pb-1">Source</th>
                           <th className="pb-1">SS</th>
                           <th className="pb-1">df</th>
@@ -446,26 +445,26 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
                           <th className="pb-1 text-right">F / p</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono text-slate-700 dark:text-slate-300">
                         <tr>
-                          <td className="py-1 font-sans font-medium text-slate-800">Regression</td>
+                          <td className="py-1 font-sans font-medium text-slate-800 dark:text-slate-200">Regression</td>
                           <td className="py-1">{calibration.anova.ssReg.toFixed(5)}</td>
                           <td className="py-1">{calibration.anova.dfReg}</td>
                           <td className="py-1">{calibration.anova.msReg.toFixed(5)}</td>
-                          <td className="py-1 text-right font-bold text-indigo-700">
+                          <td className="py-1 text-right font-bold text-indigo-700 dark:text-indigo-400">
                             F = {Number.isFinite(calibration.anova.fStat) ? calibration.anova.fStat.toFixed(2) : '—'}
                           </td>
                         </tr>
                         <tr>
-                          <td className="py-1 font-sans font-medium text-slate-800">Residual</td>
+                          <td className="py-1 font-sans font-medium text-slate-800 dark:text-slate-200">Residual</td>
                           <td className="py-1">{calibration.anova.ssRes.toFixed(5)}</td>
                           <td className="py-1">{calibration.anova.dfRes}</td>
                           <td className="py-1">{calibration.anova.msRes.toFixed(5)}</td>
-                          <td className="py-1 text-right text-emerald-700 font-bold">
+                          <td className="py-1 text-right text-emerald-700 dark:text-emerald-400 font-bold">
                             {calibration.anova.pValue < 0.001 ? 'p < 0.001' : `p = ${calibration.anova.pValue.toFixed(3)}`}
                           </td>
                         </tr>
-                        <tr className="text-slate-500">
+                        <tr className="text-slate-500 dark:text-slate-400">
                           <td className="py-1 font-sans font-medium">Total</td>
                           <td className="py-1">{calibration.anova.ssTot.toFixed(5)}</td>
                           <td className="py-1">{calibration.anova.dfTot}</td>
@@ -474,7 +473,7 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
                         </tr>
                       </tbody>
                     </table>
-                    <p className="text-[10px] text-slate-500 italic">
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 italic">
                       ANOVA tests whether the slope is statistically significant ($H_0: m = 0$). Significant $F$-ratio confirms dose-dependent response.
                     </p>
                   </div>
@@ -483,8 +482,8 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
             )}
 
             {hasNegativeValues && (
-              <div className="mx-5 mt-4 p-3 rounded-md bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-800">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="mx-5 mt-4 p-3 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-start gap-2 text-xs text-amber-800 dark:text-amber-300">
+                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <span>
                   Negative EU/mL or absorbance values detected in inputs — verify data entry before relying on estimations.
                 </span>
@@ -492,8 +491,8 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
             )}
 
             {isNegativeSlope && (
-              <div className="mx-5 mt-3 p-3 rounded-md bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-800">
-                <TrendingDown className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="mx-5 mt-3 p-3 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-start gap-2 text-xs text-amber-800 dark:text-amber-300">
+                <TrendingDown className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <span>
                   Fitted slope is negative — absorbance decreases as concentration increases. Check standards data.
                 </span>
@@ -501,7 +500,7 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
             )}
           </div>
 
-          <div className="px-5 py-3.5 bg-slate-50/80 border-t border-slate-200 mt-4 flex items-start gap-2 text-[11px] text-slate-500">
+          <div className="px-5 py-3.5 bg-slate-50/80 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 mt-4 flex items-start gap-2 text-[11px] text-slate-500 dark:text-slate-400">
             <Info className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
             <span>
               <em>Archachatina marginata</em> hemolymph turbidimetric assay &bull; R² and ANOVA validate standard curve fidelity.

@@ -173,4 +173,53 @@ export interface WavelengthSettings {
   phenoloxidase: number; // nm, e.g. 490
 }
 
+export interface BlandAltmanPoint {
+  name: string;
+  mean: number;
+  diff: number;
+  rpd: number;
+  isOutlier: boolean;
+}
+
+export interface BlandAltmanResult {
+  n: number;
+  meanBias: number;
+  sdBias: number;
+  upperLoa: number;
+  lowerLoa: number;
+  seBias: number;
+  seLoa: number;
+  points: BlandAltmanPoint[];
+  withinLoaCount: number;
+  percentWithinLoa: number;
+}
+
+export interface PassingBablokResult {
+  slope: number;
+  intercept: number;
+  slopeCiLower: number;
+  slopeCiUpper: number;
+  interceptCiLower: number;
+  interceptCiUpper: number;
+  hasConstantBias: boolean; // 0 not in CI of intercept
+  hasProportionalBias: boolean; // 1 not in CI of slope
+  pearsonR: number;
+  r2: number;
+  equation: string;
+}
+
+export interface DemingResult {
+  slope: number;
+  intercept: number;
+  equation: string;
+  r2: number;
+}
+
+export interface AgreementAnalysisSummary {
+  blandAltman: BlandAltmanResult;
+  passingBablok?: PassingBablokResult;
+  deming?: DemingResult;
+  concordanceStatement: string;
+}
+
 

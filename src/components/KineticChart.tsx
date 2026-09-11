@@ -7,7 +7,7 @@ interface KineticChartProps {
   isPrintView?: boolean;
 }
 
-const PALETTE = [
+const PALETTE_LIGHT = [
   '#4f46e5', // indigo
   '#059669', // emerald
   '#d97706', // amber
@@ -16,6 +16,17 @@ const PALETTE = [
   '#7c3aed', // violet
   '#db2777', // pink
   '#475569', // slate
+];
+
+const PALETTE_DARK = [
+  '#818cf8', // indigo
+  '#34d399', // emerald
+  '#fbbf24', // amber
+  '#f87171', // red
+  '#38bdf8', // sky
+  '#a78bfa', // violet
+  '#f472b6', // pink
+  '#94a3b8', // slate
 ];
 
 export const KineticChart: React.FC<KineticChartProps> = ({
@@ -31,6 +42,9 @@ export const KineticChart: React.FC<KineticChartProps> = ({
     const renderChart = () => {
       if (typeof window === 'undefined' || !window.Plotly) return;
 
+      const isDark = !isPrintView && document.documentElement.classList.contains('dark');
+      const palette = isDark ? PALETTE_DARK : PALETTE_LIGHT;
+
       const validResults = results.filter(
         (r) => r.valid && r.timePoints.length >= 2
       );
@@ -38,7 +52,7 @@ export const KineticChart: React.FC<KineticChartProps> = ({
       const traces: any[] = [];
 
       validResults.forEach((res, index) => {
-        const color = PALETTE[index % PALETTE.length];
+        const color = palette[index % palette.length];
 
         // Kinetic progression points & line
         traces.push({
@@ -72,25 +86,25 @@ export const KineticChart: React.FC<KineticChartProps> = ({
           orientation: 'h',
           x: 0,
           y: isPrintView ? -0.2 : 1.12,
-          font: { size: isPrintView ? 8 : 9, color: '#475569' },
+          font: { size: isPrintView ? 8 : 9, color: isDark ? '#cbd5e1' : '#475569' },
         },
         paper_bgcolor: 'rgba(0,0,0,0)',
         plot_bgcolor: 'rgba(0,0,0,0)',
         xaxis: {
           title: {
             text: 'Reaction Time (minutes)',
-            font: { size: isPrintView ? 9 : 11, color: '#64748b' },
+            font: { size: isPrintView ? 9 : 11, color: isDark ? '#94a3b8' : '#64748b' },
           },
-          gridcolor: '#f1f5f9',
-          tickfont: { size: isPrintView ? 8 : 9, color: '#94a3b8' },
+          gridcolor: isDark ? '#334155' : '#f1f5f9',
+          tickfont: { size: isPrintView ? 8 : 9, color: isDark ? '#cbd5e1' : '#94a3b8' },
         },
         yaxis: {
           title: {
             text: 'Absorbance at λ (OD)',
-            font: { size: isPrintView ? 9 : 11, color: '#64748b' },
+            font: { size: isPrintView ? 9 : 11, color: isDark ? '#94a3b8' : '#64748b' },
           },
-          gridcolor: '#f1f5f9',
-          tickfont: { size: isPrintView ? 8 : 9, color: '#94a3b8' },
+          gridcolor: isDark ? '#334155' : '#f1f5f9',
+          tickfont: { size: isPrintView ? 8 : 9, color: isDark ? '#cbd5e1' : '#94a3b8' },
         },
         autosize: true,
       };
@@ -107,6 +121,8 @@ export const KineticChart: React.FC<KineticChartProps> = ({
 
     renderChart();
 
+    window.addEventListener('app-theme-changed', renderChart);
+
     const resizeObserver = new ResizeObserver(() => {
       if (containerRef.current && window.Plotly) {
         try {
@@ -120,6 +136,7 @@ export const KineticChart: React.FC<KineticChartProps> = ({
     resizeObserver.observe(containerRef.current);
 
     return () => {
+      window.removeEventListener('app-theme-changed', renderChart);
       resizeObserver.disconnect();
     };
   }, [results, isPrintView]);

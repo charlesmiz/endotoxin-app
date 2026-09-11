@@ -7,7 +7,6 @@ import {
   Download,
   Clipboard,
   Calculator,
-  Sparkles,
   RotateCcw,
   CheckCircle2,
   AlertTriangle,
@@ -115,18 +114,18 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
         {/* Header bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-200 bg-slate-50/60">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/60">
           <div>
-            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight">
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-tight">
               Coagulation Sample Estimator
             </h2>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
               Interpolate unknown test infusion endotoxin levels using fitted calibration curve at {coagWavelength} nm
             </p>
           </div>
-          <div className="flex items-center gap-2 text-xs text-slate-600">
+          <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
             <span className="font-medium">Pharmacopeial Threshold:</span>
             <input
               type="number"
@@ -135,9 +134,9 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
               onChange={(e) =>
                 setThreshold(parseFloat(e.target.value) || 0)
               }
-              className="w-20 font-mono text-xs px-2.5 py-1 border border-slate-200 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 bg-white font-bold text-slate-800"
+              className="w-20 font-mono text-xs px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 font-bold text-slate-800 dark:text-slate-100"
             />
-            <span className="font-semibold text-slate-500">EU/mL</span>
+            <span className="font-semibold text-slate-500 dark:text-slate-400">EU/mL</span>
           </div>
         </div>
 
@@ -146,7 +145,7 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-200">
+                <tr className="text-[11px] uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
                   <th className="text-left pb-2 font-medium w-1/3">
                     Sample / Batch Description
                   </th>
@@ -159,7 +158,7 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
                   <th className="w-6"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {rows.map((row) => (
                   <tr key={row.id}>
                     <td className="py-1.5 pr-2">
@@ -170,7 +169,7 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
                         onChange={(e) =>
                           handleRowChange(row.id, 'name', e.target.value)
                         }
-                        className="w-full border border-slate-200 bg-slate-50/50 text-xs text-slate-900 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white font-medium"
+                        className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-850 text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800 font-medium"
                       />
                     </td>
                     <td className="py-1.5 pr-2">
@@ -182,7 +181,7 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
                         onChange={(e) =>
                           handleRowChange(row.id, 'abs', e.target.value)
                         }
-                        className="w-full border border-slate-200 bg-slate-50/50 font-mono text-xs text-slate-900 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white"
+                        className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-850 font-mono text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800"
                       />
                     </td>
                     <td className="py-1.5 pr-2">
@@ -193,13 +192,13 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
                         onChange={(e) =>
                           handleRowChange(row.id, 'replicates', e.target.value)
                         }
-                        className="w-full border border-slate-200 bg-slate-50/50 font-mono text-xs text-slate-900 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white"
+                        className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-850 font-mono text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800"
                       />
                     </td>
                     <td className="py-1.5 text-center">
                       <button
                         onClick={() => handleRemoveRow(row.id)}
-                        className="text-slate-400 hover:text-rose-600 transition p-1 rounded cursor-pointer"
+                        className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition p-1 rounded cursor-pointer"
                         title="Remove sample"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -211,54 +210,54 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
             </table>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-slate-100">
+          <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
             <button
               onClick={handleAddRow}
-              className="px-3 py-1.5 rounded-md border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 transition flex items-center gap-1 cursor-pointer"
+              className="px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center gap-1 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" /> Add sample
             </button>
             {onLoadExample && (
               <button
                 onClick={onLoadExample}
-                className="px-3 py-1.5 rounded-md border border-indigo-200 bg-indigo-50/50 text-indigo-700 text-xs font-medium hover:bg-indigo-100/70 transition flex items-center gap-1 cursor-pointer"
+                className="px-3 py-1.5 rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-medium hover:bg-indigo-100/70 dark:hover:bg-indigo-900/60 transition shadow-2xs cursor-pointer"
                 title="Load example test samples"
               >
-                <Sparkles className="w-3.5 h-3.5" /> Load Example
+                Load Example
               </button>
             )}
             <button
               onClick={onClear}
-              className="px-3 py-1.5 rounded-md border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 transition flex items-center gap-1 cursor-pointer"
+              className="px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center gap-1 cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" /> Clear
             </button>
             <button
               onClick={() => setShowPasteBox(!showPasteBox)}
-              className="px-3 py-1.5 rounded-md border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 transition flex items-center gap-1 cursor-pointer"
+              className="px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center gap-1 cursor-pointer"
             >
               <Clipboard className="w-3.5 h-3.5" /> Paste multiple
             </button>
             <button
               onClick={onEstimate}
               disabled={!calibration}
-              className="px-4 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto"
+              className="px-4 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-600 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto"
             >
               <Calculator className="w-3.5 h-3.5" /> Estimate Concentrations
             </button>
           </div>
 
           {showPasteBox && (
-            <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
-              <p className="text-xs text-slate-600">
-                Paste comma-separated rows: <span className="font-mono text-slate-800">Sample Name, Mean Absorbance, Replicates</span>
+            <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-850 rounded-lg border border-slate-200 dark:border-slate-700 space-y-2">
+              <p className="text-xs text-slate-600 dark:text-slate-400">
+                Paste comma-separated rows: <span className="font-mono text-slate-800 dark:text-slate-200">Sample Name, Mean Absorbance, Replicates</span>
               </p>
               <textarea
                 rows={3}
                 value={pasteText}
                 onChange={(e) => setPasteText(e.target.value)}
                 placeholder="Sample A, 0.125, 0.124, 0.126&#10;Sample B, 0.045"
-                className="w-full text-xs font-mono p-2.5 border border-slate-200 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 bg-white"
+                className="w-full text-xs font-mono p-2.5 border border-slate-200 dark:border-slate-700 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               />
               <button
                 onClick={handleImportPaste}
@@ -270,23 +269,23 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
           )}
 
           {!calibration && (
-            <p className="text-[11px] text-amber-700 mt-2 bg-amber-50 p-2.5 rounded-lg border border-amber-200/60 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+            <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-2 bg-amber-50 dark:bg-amber-950/40 p-2.5 rounded-lg border border-amber-200/60 dark:border-amber-900/60 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
               <span>Note: Compute the calibration curve in Tab 1 first to enable sample estimations.</span>
             </p>
           )}
         </div>
 
         {/* Results table */}
-        <div className="border-t border-slate-200">
-          <div className="flex items-center justify-between px-5 py-3 bg-slate-50/60">
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+        <div className="border-t border-slate-200 dark:border-slate-800">
+          <div className="flex items-center justify-between px-5 py-3 bg-slate-50/60 dark:bg-slate-800/60">
+            <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
               Calculated Endotoxin Concentrations &amp; Status Remarks
             </h3>
             <button
               onClick={onDownloadCsv}
               disabled={!results.length}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-200 text-slate-700 text-xs font-medium hover:bg-white transition disabled:opacity-40 cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition disabled:opacity-40 cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" /> Download CSV
             </button>
@@ -295,7 +294,7 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full text-xs border-collapse">
               <thead>
-                <tr className="text-left text-[11px] uppercase tracking-wider text-slate-400 border-y border-slate-200 bg-slate-50/40">
+                <tr className="text-left text-[11px] uppercase tracking-wider text-slate-400 border-y border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/40">
                   <th className="px-5 py-2.5 font-medium">Sample Name</th>
                   <th className="px-5 py-2.5 font-medium">Mean Abs (OD_{coagWavelength})</th>
                   <th className="px-5 py-2.5 font-medium">Estimated EU/mL</th>
@@ -303,7 +302,7 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
                   <th className="px-5 py-2.5 font-medium text-right">Status Badge</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {results.length === 0 ? (
                   <tr>
                     <td
@@ -325,46 +324,46 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
                         : 'Single reading';
 
                     return (
-                      <tr key={idx} className="hover:bg-slate-50/60">
-                        <td className="px-5 py-3 font-semibold text-slate-800">
+                      <tr key={idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50">
+                        <td className="px-5 py-3 font-semibold text-slate-800 dark:text-slate-100">
                           {r.name}
                         </td>
-                        <td className="px-5 py-3 font-mono text-slate-700">
+                        <td className="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">
                           {r.abs.toFixed(4)}
-                          <div className="text-[10px] text-slate-400 mt-0.5 font-sans font-normal">
+                          <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 font-sans font-normal">
                             {repText}
                           </div>
                         </td>
-                        <td className="px-5 py-3 font-mono font-bold text-slate-900 text-sm">
-                          {euText} <span className="text-[11px] font-sans font-normal text-slate-500">EU/mL</span>
+                        <td className="px-5 py-3 font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">
+                          {euText} <span className="text-[11px] font-sans font-normal text-slate-500 dark:text-slate-400">EU/mL</span>
                         </td>
-                        <td className="px-5 py-3 text-slate-600 text-xs">
+                        <td className="px-5 py-3 text-slate-600 dark:text-slate-300 text-xs">
                           {r.remark || (isAbove ? 'Exceeds threshold' : 'Within safety threshold')}
                         </td>
                         <td className="px-5 py-3 text-right">
                           <div className="flex flex-wrap justify-end gap-1">
                             {r.invalidInput && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 text-rose-800">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300">
                                 Invalid input
                               </span>
                             )}
                             {r.outOfRange && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
                                 Extrapolated
                               </span>
                             )}
                             {r.negativeEstimate && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                                 Clamped 0.000 EU
                               </span>
                             )}
                             {r.ambiguous && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300">
                                 Ambiguous roots
                               </span>
                             )}
                             {r.noSolution && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 text-rose-800">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300">
                                 No range solution
                               </span>
                             )}
@@ -374,8 +373,8 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
                                 <span
                                   className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                                     isAbove
-                                      ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                                      : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                      ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                                      : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
                                   }`}
                                 >
                                   {isAbove

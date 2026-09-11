@@ -22,6 +22,7 @@ export const KineticCalibrationChart: React.FC<KineticCalibrationChartProps> = (
     const renderChart = () => {
       if (typeof window === 'undefined' || !window.Plotly) return;
 
+      const isDark = !isPrintView && document.documentElement.classList.contains('dark');
       const stdX = model.points.map((p) => p[0]);
       const stdY = model.points.map((p) => p[1]);
 
@@ -33,10 +34,10 @@ export const KineticCalibrationChart: React.FC<KineticCalibrationChartProps> = (
         type: 'scatter',
         name: 'PO Kinetic Standards',
         marker: {
-          color: '#4f46e5',
+          color: isDark ? '#818cf8' : '#4f46e5',
           size: isPrintView ? 7 : 9,
           symbol: 'circle',
-          line: { color: '#ffffff', width: 1.5 },
+          line: { color: isDark ? '#1e1b4b' : '#ffffff', width: 1.5 },
         },
         hovertemplate: 'Standard: %{x} EU/mL<br>Rate: %{y:.5f} OD/min<extra></extra>',
       };
@@ -58,7 +59,7 @@ export const KineticCalibrationChart: React.FC<KineticCalibrationChartProps> = (
         type: 'scatter',
         name: `Fit: v = ${model.slope.toFixed(4)}x + ${model.intercept.toFixed(4)} (R²=${model.r2.toFixed(4)})`,
         line: {
-          color: '#6366f1',
+          color: isDark ? '#a5b4fc' : '#6366f1',
           width: isPrintView ? 1.5 : 2,
           dash: 'solid',
         },
@@ -89,10 +90,10 @@ export const KineticCalibrationChart: React.FC<KineticCalibrationChartProps> = (
           name: 'Estimated Samples',
           text: sampNames,
           marker: {
-            color: '#059669',
+            color: isDark ? '#34d399' : '#059669',
             size: isPrintView ? 7 : 9,
             symbol: 'diamond',
-            line: { color: '#ffffff', width: 1.5 },
+            line: { color: isDark ? '#064e3b' : '#ffffff', width: 1.5 },
           },
           hovertemplate: '<b>%{text}</b><br>Rate: %{y:.5f} OD/min<br>Est. EU: %{x:.4f} EU/mL<extra></extra>',
         };
@@ -108,25 +109,25 @@ export const KineticCalibrationChart: React.FC<KineticCalibrationChartProps> = (
           orientation: 'h',
           x: 0,
           y: isPrintView ? -0.2 : 1.12,
-          font: { size: isPrintView ? 8 : 9, color: '#475569' },
+          font: { size: isPrintView ? 8 : 9, color: isDark ? '#cbd5e1' : '#475569' },
         },
         paper_bgcolor: 'rgba(0,0,0,0)',
         plot_bgcolor: 'rgba(0,0,0,0)',
         xaxis: {
           title: {
             text: 'Endotoxin Concentration (EU/mL)',
-            font: { size: isPrintView ? 9 : 11, color: '#64748b' },
+            font: { size: isPrintView ? 9 : 11, color: isDark ? '#94a3b8' : '#64748b' },
           },
-          gridcolor: '#f1f5f9',
-          tickfont: { size: isPrintView ? 8 : 9, color: '#94a3b8' },
+          gridcolor: isDark ? '#334155' : '#f1f5f9',
+          tickfont: { size: isPrintView ? 8 : 9, color: isDark ? '#cbd5e1' : '#94a3b8' },
         },
         yaxis: {
           title: {
             text: 'Kinetic Rate dA/dt (OD/min)',
-            font: { size: isPrintView ? 9 : 11, color: '#64748b' },
+            font: { size: isPrintView ? 9 : 11, color: isDark ? '#94a3b8' : '#64748b' },
           },
-          gridcolor: '#f1f5f9',
-          tickfont: { size: isPrintView ? 8 : 9, color: '#94a3b8' },
+          gridcolor: isDark ? '#334155' : '#f1f5f9',
+          tickfont: { size: isPrintView ? 8 : 9, color: isDark ? '#cbd5e1' : '#94a3b8' },
         },
         autosize: true,
       };
@@ -143,6 +144,8 @@ export const KineticCalibrationChart: React.FC<KineticCalibrationChartProps> = (
 
     renderChart();
 
+    window.addEventListener('app-theme-changed', renderChart);
+
     const resizeObserver = new ResizeObserver(() => {
       if (containerRef.current && window.Plotly) {
         try {
@@ -156,6 +159,7 @@ export const KineticCalibrationChart: React.FC<KineticCalibrationChartProps> = (
     resizeObserver.observe(containerRef.current);
 
     return () => {
+      window.removeEventListener('app-theme-changed', renderChart);
       resizeObserver.disconnect();
     };
   }, [model, samples, isPrintView]);

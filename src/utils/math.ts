@@ -9,6 +9,11 @@ import {
   KineticResult,
   KineticCalibrationModel,
   AssayComparisonItem,
+  BlandAltmanResult,
+  BlandAltmanPoint,
+  PassingBablokResult,
+  DemingResult,
+  AgreementAnalysisSummary,
 } from '../types';
 
 export function mean(values: number[]): number {
@@ -637,6 +642,279 @@ export function computeAssayComparison(
   });
 
   return comparisons;
+}
+
+/**
+ * Computes Bland-Altman agreement analysis for dual-assay endotoxin estimates.
+ * Accounts for measurement error in both assays (CLSI EP09-A3 methodology).
+ */
+export function computeBlandAltman(
+  comparisons: AssayComparisonItem[]
+): BlandAltmanResult | null {
+  const valid = comparisons.filter(
+    (c) =>
+      Number.isFinite(c.coagEu) &&
+      Number.isFinite(c.poEu)
+  );
+
+  if (valid.length < 2) return null;
+
+  const diffs = valid.map((c) => c.coagEu - c.poEu);
+  const means = valid.map((c) => (c.coagEu + c.poEu) / 2);
+
+  const meanBias = mean(diffs);
+  const sdBias = sd(diffs);
+
+  if (!Number.isFinite(meanBias) || !Number.isFinite(sdBias)) return null;
+
+  const upperLoa = meanBias + 1.96 * sdBias;
+  const lowerLoa = meanBias - 1.96 * sdBias;
+
+  const n = valid.length;
+  const seBias = sdBias / Math.sqrt(n);
+  const seLoa = Math.sqrt((3 * (sdBias * sdBias)) / n);
+
+  let withinLoaCount = 0;
+  const points: BlandAltmanPoint[] = valid.map((c, i) => {
+    const diff = diffs[i];
+    const m = means[i];
+    const isOutlier = diff > upperLoa || diff < lowerLoa;
+    if (!isOutlier) withinLoaCount++;
+
+    return {
+      name: c.name,
+      mean: m,
+      diff,
+      rpd: c.rpd,
+      isOutlier,
+    };
+  });
+
+  const percentWithinLoa = n > 0 ? (withinLoaCount / n) * 100 : 0;
+
+  return {
+    n,
+    meanBias,
+    sdBias,
+    upperLoa,
+    lowerLoa,
+    seBias,
+    seLoa,
+    points,
+    withinLoaCount,
+    percentWithinLoa,
+  };
+}
+
+/**
+ * Computes Passing-Bablok non-parametric regression.
+ * Accounts for measurement errors in both assays, non-normal distributions,
+ * and potential extreme values (Passing & Bablok, J Clin Chem Clin Biochem, 1983).
+ */
+export function computePassingBablok(
+  comparisons: AssayComparisonItem[]
+): PassingBablokResult | null {
+  const valid = comparisons.filter(
+    (c) =>
+      Number.isFinite(c.coagEu) &&
+      Number.isFinite(c.poEu)
+  );
+
+  const n = valid.length;
+  if (n < 3) return null;
+
+  // Pairwise slopes S_ij
+  const slopes: number[] = [];
+  let kCount = 0; // count of slopes < -1
+
+  for (let i = 0; i < n - 1; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const dx = valid[j].coagEu - valid[i].coagEu;
+      const dy = valid[j].poEu - valid[i].poEu;
+
+      if (Math.abs(dx) > 1e-9) {
+        const s = dy / dx;
+        if (Math.abs(s + 1) > 1e-9) {
+          slopes.push(s);
+          if (s < -1) {
+            kCount++;
+          }
+        }
+      }
+    }
+  }
+
+  if (slopes.length === 0) return null;
+
+  slopes.sort((a, b) => a - b);
+  const N = slopes.length;
+
+  // Passing-Bablok Median Slope (shifted by K)
+  const medianIndex = Math.floor(N / 2);
+  const shiftedIndex = Math.min(Math.max(0, medianIndex + kCount), N - 1);
+  const slope = slopes[shiftedIndex];
+
+  // 95% Confidence Interval for Slope
+  const cAlpha = 1.96 * Math.sqrt((N * (2 * n + 5)) / 18);
+  const m1 = Math.max(0, Math.floor((N - cAlpha) / 2));
+  const m2 = Math.min(N - 1, Math.ceil((N + cAlpha) / 2));
+
+  const slopeCiLower = slopes[Math.min(Math.max(0, m1 + kCount), N - 1)];
+  const slopeCiUpper = slopes[Math.min(Math.max(0, m2 + kCount), N - 1)];
+
+  // Intercept calculation: median of (y_i - B * x_i)
+  const diffs = valid.map((p) => p.poEu - slope * p.coagEu);
+  diffs.sort((a, b) => a - b);
+  const intercept = diffs[Math.floor(diffs.length / 2)];
+
+  // Intercept CI using slope bounds
+  const diffsLower = valid.map((p) => p.poEu - slopeCiUpper * p.coagEu);
+  diffsLower.sort((a, b) => a - b);
+  const interceptCiLower = diffsLower[Math.floor(diffsLower.length / 2)];
+
+  const diffsUpper = valid.map((p) => p.poEu - slopeCiLower * p.coagEu);
+  diffsUpper.sort((a, b) => a - b);
+  const interceptCiUpper = diffsUpper[Math.floor(diffsUpper.length / 2)];
+
+  // Tests for systematic bias
+  // Constant bias exists if 0 is NOT in [interceptCiLower, interceptCiUpper]
+  const hasConstantBias =
+    !(Math.min(interceptCiLower, interceptCiUpper) <= 0 &&
+      Math.max(interceptCiLower, interceptCiUpper) >= 0);
+
+  // Proportional bias exists if 1.0 is NOT in [slopeCiLower, slopeCiUpper]
+  const hasProportionalBias =
+    !(Math.min(slopeCiLower, slopeCiUpper) <= 1.0 &&
+      Math.max(slopeCiLower, slopeCiUpper) >= 1.0);
+
+  // Pearson correlation r & r2 for completeness
+  const xMean = mean(valid.map((p) => p.coagEu));
+  const yMean = mean(valid.map((p) => p.poEu));
+  let sxx = 0;
+  let syy = 0;
+  let sxy = 0;
+
+  valid.forEach((p) => {
+    const dx = p.coagEu - xMean;
+    const dy = p.poEu - yMean;
+    sxx += dx * dx;
+    syy += dy * dy;
+    sxy += dx * dy;
+  });
+
+  const denom = Math.sqrt(sxx * syy);
+  const pearsonR = denom > 0 ? sxy / denom : 0;
+  const r2 = pearsonR * pearsonR;
+
+  const sign = intercept >= 0 ? '+' : '-';
+  const equation = `y = ${slope.toFixed(3)}x ${sign} ${Math.abs(intercept).toFixed(3)}`;
+
+  return {
+    slope,
+    intercept,
+    slopeCiLower: Math.min(slopeCiLower, slopeCiUpper),
+    slopeCiUpper: Math.max(slopeCiLower, slopeCiUpper),
+    interceptCiLower: Math.min(interceptCiLower, interceptCiUpper),
+    interceptCiUpper: Math.max(interceptCiLower, interceptCiUpper),
+    hasConstantBias,
+    hasProportionalBias,
+    pearsonR,
+    r2,
+    equation,
+  };
+}
+
+/**
+ * Computes Deming regression (Orthogonal Least Squares with lambda = 1)
+ * when error variances of both coagulation and PO assays are assumed equal.
+ */
+export function computeDemingRegression(
+  comparisons: AssayComparisonItem[]
+): DemingResult | null {
+  const valid = comparisons.filter(
+    (c) =>
+      Number.isFinite(c.coagEu) &&
+      Number.isFinite(c.poEu)
+  );
+
+  const n = valid.length;
+  if (n < 2) return null;
+
+  const xMean = mean(valid.map((p) => p.coagEu));
+  const yMean = mean(valid.map((p) => p.poEu));
+
+  let sxx = 0;
+  let syy = 0;
+  let sxy = 0;
+
+  valid.forEach((p) => {
+    const dx = p.coagEu - xMean;
+    const dy = p.poEu - yMean;
+    sxx += dx * dx;
+    syy += dy * dy;
+    sxy += dx * dy;
+  });
+
+  if (sxy === 0 || sxx === 0) return null;
+
+  // Deming slope with lambda = 1
+  const slope = (syy - sxx + Math.sqrt((syy - sxx) ** 2 + 4 * (sxy ** 2))) / (2 * sxy);
+  const intercept = yMean - slope * xMean;
+
+  const denom = Math.sqrt(sxx * syy);
+  const r = denom > 0 ? sxy / denom : 0;
+  const r2 = r * r;
+
+  const sign = intercept >= 0 ? '+' : '-';
+  const equation = `y = ${slope.toFixed(3)}x ${sign} ${Math.abs(intercept).toFixed(3)}`;
+
+  return {
+    slope,
+    intercept,
+    equation,
+    r2,
+  };
+}
+
+/**
+ * Synthesizes complete Method Comparison Agreement Summary for clinical/analytical reporting.
+ */
+export function computeAgreementSummary(
+  comparisons: AssayComparisonItem[]
+): AgreementAnalysisSummary | null {
+  const ba = computeBlandAltman(comparisons);
+  if (!ba) return null;
+
+  const pb = computePassingBablok(comparisons);
+  const deming = computeDemingRegression(comparisons);
+
+  const avgRpd =
+    comparisons.reduce((acc, c) => acc + c.rpd, 0) / comparisons.length;
+
+  let statement = '';
+  const direction =
+    ba.meanBias > 0.005
+      ? 'higher'
+      : ba.meanBias < -0.005
+      ? 'lower'
+      : 'virtually identical';
+
+  statement = `The two analytical methods demonstrate an overall mean bias of ${ba.meanBias.toFixed(3)} EU/mL (Coagulation reading on average ${direction} than PO kinetics). The 95% Limits of Agreement span from ${ba.lowerLoa.toFixed(3)} to ${ba.upperLoa.toFixed(3)} EU/mL with ${ba.percentWithinLoa.toFixed(0)}% of matched test samples within limits. Matched samples exhibited a mean Relative Percent Difference (RPD) of ${avgRpd.toFixed(1)}%.`;
+
+  if (pb) {
+    if (!pb.hasConstantBias && !pb.hasProportionalBias) {
+      statement += ` Passing-Bablok non-parametric regression confirms no significant constant or proportional systematic error (Slope: ${pb.slope.toFixed(2)} [95% CI: ${pb.slopeCiLower.toFixed(2)}–${pb.slopeCiUpper.toFixed(2)}], Intercept: ${pb.intercept.toFixed(3)} [95% CI: ${pb.interceptCiLower.toFixed(3)}–${pb.interceptCiUpper.toFixed(3)}]).`;
+    } else {
+      statement += ` Passing-Bablok regression notes ${pb.hasProportionalBias ? 'proportional difference' : ''}${pb.hasProportionalBias && pb.hasConstantBias ? ' and ' : ''}${pb.hasConstantBias ? 'constant systematic offset' : ''} between assays (Slope: ${pb.slope.toFixed(2)}, Intercept: ${pb.intercept.toFixed(3)}).`;
+    }
+  }
+
+  return {
+    blandAltman: ba,
+    passingBablok: pb || undefined,
+    deming: deming || undefined,
+    concordanceStatement: statement,
+  };
 }
 
 

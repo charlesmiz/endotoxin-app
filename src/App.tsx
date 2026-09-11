@@ -23,10 +23,10 @@ import { SampleEstimatorTab } from './components/SampleEstimatorTab';
 import { PhenoloxidaseTab } from './components/PhenoloxidaseTab';
 import { DualAssayComparisonSection } from './components/DualAssayComparisonSection';
 import { ValidationReportTab } from './components/ValidationReportTab';
-import { FaviconModal } from './components/FaviconModal';
 import { LabManualModal } from './components/LabManualModal';
 import { FAVICON_COLLECTION, applyFaviconToDocument } from './data/favicons';
-import { GitCompare, Sparkles } from 'lucide-react';
+import { useTheme } from './utils/theme';
+import { GitCompare } from 'lucide-react';
 
 const EMPTY_CAL_ROWS: CalibrationRow[] = [
   { id: '1', eu: '', abs: '', replicates: '' },
@@ -139,9 +139,11 @@ export default function App() {
   const [comparisons, setComparisons] = useState<AssayComparisonItem[]>([]);
 
   // Modals state
-  const [isFaviconModalOpen, setIsFaviconModalOpen] = useState(false);
   const [isLabManualOpen, setIsLabManualOpen] = useState(false);
   const [activeFaviconId, setActiveFaviconId] = useState<string>('bio-flask');
+
+  // Dark & Light theme state
+  const { preference: themePreference, isDark, toggleTheme } = useTheme();
 
   // Load saved custom or selected favicon on startup
   useEffect(() => {
@@ -514,50 +516,51 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans flex flex-col transition-colors">
       <Header
         runLabel={runLabel}
         setRunLabel={setRunLabel}
         wavelengths={wavelengths}
         setWavelengths={setWavelengths}
         onGoToReport={() => setActiveTab('rep')}
-        onOpenFaviconModal={() => setIsFaviconModalOpen(true)}
         onOpenLabManual={() => setIsLabManualOpen(true)}
+        themePreference={themePreference}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
       />
 
       <div className="flex-1 max-w-[1180px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* Page Title Header & Global Quick Actions */}
         <div className="no-print flex flex-col sm:flex-row sm:items-end justify-between gap-3">
           <div>
-            <p className="text-[11px] uppercase tracking-widest text-indigo-600 font-bold mb-0.5">
+            <p className="text-[11px] uppercase tracking-widest text-indigo-600 dark:text-indigo-400 font-bold mb-0.5">
               Hemolymph Endotoxin Assay Suite
             </p>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
               Endotoxin Assay Calibration &amp; Dual-Assay Validation
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               <em>Archachatina marginata</em> calibration, commercial fluid estimation, phenoloxidase kinetics &amp; orthogonal concordance.
             </p>
           </div>
 
           <button
             onClick={handleLoadFullDualAssayStudy}
-            className="px-3.5 py-1.5 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg transition flex items-center gap-1.5 shadow-2xs self-start sm:self-auto cursor-pointer"
+            className="px-3.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded-lg transition shadow-2xs self-start sm:self-auto cursor-pointer"
             title="Populate complete dual-assay dataset across Coagulation and Phenoloxidase for immediate comparison"
           >
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
             Load Full Dual-Assay Study
           </button>
         </div>
 
         {/* Tab Rail */}
-        <nav className="flex items-center gap-4 sm:gap-6 border-b border-slate-200 text-xs font-medium no-print overflow-x-auto">
+        <nav className="flex items-center gap-4 sm:gap-6 border-b border-slate-200 dark:border-slate-800 text-xs font-medium no-print overflow-x-auto">
           <button
             onClick={() => setActiveTab('cal')}
             className={`pb-2.5 px-1 border-b-2 transition cursor-pointer whitespace-nowrap ${
               activeTab === 'cal'
-                ? 'border-indigo-600 text-slate-900 font-bold'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'border-indigo-600 dark:border-indigo-500 text-slate-900 dark:text-slate-100 font-bold'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
             1. Coagulation Curve
@@ -566,8 +569,8 @@ export default function App() {
             onClick={() => setActiveTab('est')}
             className={`pb-2.5 px-1 border-b-2 transition cursor-pointer whitespace-nowrap ${
               activeTab === 'est'
-                ? 'border-indigo-600 text-slate-900 font-bold'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'border-indigo-600 dark:border-indigo-500 text-slate-900 dark:text-slate-100 font-bold'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
             2. Coagulation Estimator
@@ -576,8 +579,8 @@ export default function App() {
             onClick={() => setActiveTab('po')}
             className={`pb-2.5 px-1 border-b-2 transition cursor-pointer whitespace-nowrap ${
               activeTab === 'po'
-                ? 'border-indigo-600 text-slate-900 font-bold'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'border-indigo-600 dark:border-indigo-500 text-slate-900 dark:text-slate-100 font-bold'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
             3. PO Kinetics &amp; EU/mL
@@ -586,14 +589,14 @@ export default function App() {
             onClick={() => setActiveTab('cmp')}
             className={`pb-2.5 px-1 border-b-2 transition cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
               activeTab === 'cmp'
-                ? 'border-indigo-600 text-slate-900 font-bold'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'border-indigo-600 dark:border-indigo-500 text-slate-900 dark:text-slate-100 font-bold'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            <GitCompare className="w-3.5 h-3.5 text-indigo-600" />
+            <GitCompare className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
             <span>4. Cross-Assay Concordance</span>
             {comparisons.length > 0 && (
-              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.2 rounded-full border border-emerald-200">
+              <span className="bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold px-1.5 py-0.2 rounded-full border border-emerald-200 dark:border-emerald-800">
                 {comparisons.length}
               </span>
             )}
@@ -602,8 +605,8 @@ export default function App() {
             onClick={() => setActiveTab('rep')}
             className={`pb-2.5 px-1 border-b-2 transition cursor-pointer whitespace-nowrap ${
               activeTab === 'rep'
-                ? 'border-indigo-600 text-slate-900 font-bold'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'border-indigo-600 dark:border-indigo-500 text-slate-900 dark:text-slate-100 font-bold'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
             5. Validation Report
@@ -670,7 +673,7 @@ export default function App() {
             )}
 
             {activeTab === 'cmp' && (
-              <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xs">
                 <DualAssayComparisonSection
                   comparisons={comparisons}
                   onDownloadCsv={handleDownloadComparisonCsv}
@@ -718,14 +721,6 @@ export default function App() {
       <LabManualModal
         isOpen={isLabManualOpen}
         onClose={() => setIsLabManualOpen(false)}
-      />
-
-      {/* Favicon & Brand Icon Selection Modal */}
-      <FaviconModal
-        isOpen={isFaviconModalOpen}
-        onClose={() => setIsFaviconModalOpen(false)}
-        currentFaviconId={activeFaviconId}
-        onSelectFavicon={(id) => setActiveFaviconId(id)}
       />
     </div>
   );

@@ -28,6 +28,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({
     const renderChart = () => {
       if (typeof window === 'undefined' || !window.Plotly) return;
 
+      const isDark = !isPrintView && document.documentElement.classList.contains('dark');
       const traces: any[] = [];
 
       if (calibration && calibration.points && calibration.points.length > 0) {
@@ -39,9 +40,9 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({
           type: 'scatter',
           name: 'Standards',
           marker: {
-            color: '#4f46e5',
+            color: isDark ? '#818cf8' : '#4f46e5',
             size: isPrintView ? 7 : 9,
-            line: { color: 'white', width: 1.5 },
+            line: { color: isDark ? '#1e1b4b' : 'white', width: 1.5 },
           },
         });
 
@@ -72,11 +73,11 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({
           type: 'scatter',
           name: 'Fit Line',
           line: {
-            color: '#4f46e5',
+            color: isDark ? '#a5b4fc' : '#4f46e5',
             width: 2,
             dash: calibration.type === 'quadratic' ? 'dot' : 'dash',
           },
-          opacity: 0.85,
+          opacity: 0.9,
         });
 
         // Plotted estimated samples if available
@@ -92,9 +93,10 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({
               type: 'scatter',
               name: 'Samples',
               marker: {
-                color: '#d97706',
+                color: isDark ? '#fbbf24' : '#d97706',
                 symbol: 'diamond',
                 size: isPrintView ? 7 : 9,
+                line: { color: isDark ? '#78350f' : 'white', width: 1 },
               },
             });
           }
@@ -111,18 +113,18 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({
         xaxis: {
           title: {
             text: 'Endotoxin (EU/mL)',
-            font: { size: isPrintView ? 9 : 10, color: '#64748b' },
+            font: { size: isPrintView ? 9 : 10, color: isDark ? '#94a3b8' : '#64748b' },
           },
-          gridcolor: '#f1f5f9',
-          tickfont: { size: isPrintView ? 8 : 9, color: '#94a3b8' },
+          gridcolor: isDark ? '#334155' : '#f1f5f9',
+          tickfont: { size: isPrintView ? 8 : 9, color: isDark ? '#cbd5e1' : '#94a3b8' },
         },
         yaxis: {
           title: {
             text: 'Absorbance',
-            font: { size: isPrintView ? 9 : 10, color: '#64748b' },
+            font: { size: isPrintView ? 9 : 10, color: isDark ? '#94a3b8' : '#64748b' },
           },
-          gridcolor: '#f1f5f9',
-          tickfont: { size: isPrintView ? 8 : 9, color: '#94a3b8' },
+          gridcolor: isDark ? '#334155' : '#f1f5f9',
+          tickfont: { size: isPrintView ? 8 : 9, color: isDark ? '#cbd5e1' : '#94a3b8' },
         },
         autosize: true,
       };
@@ -139,6 +141,8 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({
 
     renderChart();
 
+    window.addEventListener('app-theme-changed', renderChart);
+
     const resizeObserver = new ResizeObserver(() => {
       if (containerRef.current && window.Plotly) {
         try {
@@ -152,6 +156,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({
     resizeObserver.observe(containerRef.current);
 
     return () => {
+      window.removeEventListener('app-theme-changed', renderChart);
       resizeObserver.disconnect();
     };
   }, [calibration, sampleResults, isPrintView]);
