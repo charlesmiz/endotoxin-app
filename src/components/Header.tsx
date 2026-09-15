@@ -46,11 +46,13 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Header Actions & Controls */}
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-        {/* Editable Wavelengths inputs (documentation parameter only) */}
+        {/* Editable Wavelengths inputs (explicit documentation metadata only) */}
         <div className="hidden lg:flex items-center gap-2 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 px-2.5 py-1 rounded-lg">
           <div className="flex items-center gap-1">
             <Sliders className="w-3 h-3 text-slate-400" />
-            <span className="text-slate-500 dark:text-slate-400 text-[11px] font-medium">&lambda; (nm):</span>
+            <span className="text-slate-500 dark:text-slate-400 text-[10px] font-semibold uppercase tracking-wider">
+              Doc Metadata &lambda; (nm):
+            </span>
           </div>
           <div className="flex items-center gap-1">
             <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">Coag</span>
@@ -65,7 +67,7 @@ export const Header: React.FC<HeaderProps> = ({
                 }));
               }}
               className="w-13 px-1.5 py-0.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-center text-xs font-mono font-bold text-indigo-700 dark:text-indigo-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-              title="Coagulation Wavelength in nm (documentation parameter only — does not alter regression math)"
+              title="Coagulation Wavelength in nm (documentation metadata only — does not alter regression calculations)"
             />
           </div>
           <span className="text-slate-300 dark:text-slate-600">|</span>
@@ -82,7 +84,7 @@ export const Header: React.FC<HeaderProps> = ({
                 }));
               }}
               className="w-13 px-1.5 py-0.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-center text-xs font-mono font-bold text-emerald-700 dark:text-emerald-400 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-              title="Phenoloxidase Kinetic Wavelength in nm (documentation parameter only — does not alter regression math)"
+              title="Phenoloxidase Kinetic Wavelength in nm (documentation metadata only — does not alter regression calculations)"
             />
           </div>
         </div>

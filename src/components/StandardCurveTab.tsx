@@ -124,7 +124,7 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
             {/* Wavelength selector (documentation only) */}
             <div className="flex items-center gap-2">
               <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded shadow-2xs">
-                <span>&lambda; (nm):</span>
+                <span>Doc &lambda; (nm):</span>
                 <input
                   type="number"
                   value={coagWavelength}
@@ -133,8 +133,9 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
                     setCoagWavelength(Number.isFinite(val) ? val : 540);
                   }}
                   className="w-14 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-xs font-mono font-bold text-indigo-700 dark:text-indigo-400 outline-none text-center focus:ring-1 focus:ring-indigo-500"
-                  title="Coagulation wavelength in nm (documentation parameter only — pure linear/quadratic regression is applied)"
+                  title="Coagulation wavelength in nm (documentation metadata only — does not alter regression calculations)"
                 />
+                <span className="text-[10px] text-slate-400 font-normal hidden sm:inline">(metadata)</span>
               </label>
               <span className="text-xs text-slate-400">|</span>
               <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">

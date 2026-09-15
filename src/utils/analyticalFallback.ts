@@ -59,54 +59,56 @@ export function generateAnalyticalInterpretation(data: AnalyticalSummaryInput): 
   const lines: string[] = [];
 
   // 1. Summary: What this report means
-  lines.push('### 🔬 Summary for Biochemistry Students');
+  lines.push('### 🔬 Summary of Results');
   lines.push(
-    `This report validates endotoxin (LPS) quantification in *Archachatina marginata* snail hemolymph using two complementary biological mechanisms: **protein coagulation turbidity** (${coagWl} nm) and **phenoloxidase enzyme velocity** (${poWl} nm). The goal is to verify whether bacterial pyrogens are present in test fluids and confirm if both defense pathways reach the same conclusion.`
+    `This analysis summarizes endotoxin quantification data for *Archachatina marginata* hemolymph assays using optical protein coagulation (${coagWl} nm) and phenoloxidase kinetics (${poWl} nm). Results are evaluated against the configured study decision threshold (${threshold.toFixed(2)} EU/mL).`
   );
   lines.push('');
 
-  // 2. Sample Findings & Biological Consequence
-  lines.push('### 🧪 Sample Findings & Biological Consequence');
+  // 2. Sample Findings & Threshold Comparisons
+  lines.push('### 🧪 Sample Findings & Threshold Comparisons');
   if (coagSamples.length === 0) {
     lines.push('*No sample rows evaluated yet.*');
   } else {
     coagSamples.forEach((s) => {
       const isAbove = Number.isFinite(s.eu) && s.eu >= threshold;
-      const statusText = isAbove ? '**Flagged (Above Threshold)**' : '**Pass (Within Safe Limit)**';
+      const statusText = isAbove
+        ? '**Above configured study threshold — investigate**'
+        : '**Below configured study threshold**';
       const consequence = isAbove
-        ? `Exceeds the ${threshold.toFixed(2)} EU/mL limit. In hemolymph, endotoxin triggered coagulin polymerization, indicating substantial pyrogen exposure.`
-        : `Remains safely below ${threshold.toFixed(2)} EU/mL. Hemolymph clotting factors remained inactive (negligible pyrogen).`;
+        ? `Estimated concentration (${s.eu.toFixed(3)} EU/mL) exceeds the configured study decision threshold (${threshold.toFixed(2)} EU/mL); analytical follow-up recommended.`
+        : `Estimated concentration (${s.eu.toFixed(3)} EU/mL) is within the configured study threshold (${threshold.toFixed(2)} EU/mL).`;
       lines.push(`- **${s.name}** (${s.eu.toFixed(3)} EU/mL): ${statusText} — ${consequence}`);
     });
   }
   lines.push('');
 
   // 3. Dual-Assay Concordance & Analytical Consequence
-  lines.push('### ⚖️ Cross-Assay Concordance & Analytical Consequence');
+  lines.push('### ⚖️ Exploratory Method Comparison & Agreement');
   if (comparisons.length > 0) {
     if (discordantSamples.length > 0) {
       lines.push(
-        `- **Divergence Detected (${discordantSamples.length} discordant sample):** ${discordantSamples.map((d) => `*${d.name}* (RPD: ${d.rpd.toFixed(1)}%)`).join(', ')}. Divergence between clotting turbidity and enzyme rate suggests possible optical turbidity interference, sample color bias, or partial enzyme inhibition. **Action:** Re-run 1–2 dilution replicates before drawing conclusions.`
+        `- **Analytical Divergence Observed (${discordantSamples.length} discordant sample(s)):** ${discordantSamples.map((d) => `*${d.name}* (RPD: ${d.rpd.toFixed(1)}%)`).join(', ')}. Differences between turbidimetric coagulation and kinetic velocity may reflect matrix background absorbance, non-parallel slopes, or localized reaction rates. Follow-up dilution re-testing is recommended.`
       );
     } else {
       lines.push(
-        `- **High Cross-Method Agreement:** Matched samples show consistent results between physical clotting and phenoloxidase kinetics (RPD ≤ 20%). This confirms that both detection pathways validate the same endotoxin level with high analytical confidence.`
+        `- **Close Cross-Assay Agreement:** Matched samples demonstrate consistent estimates between physical coagulation and phenoloxidase kinetic pathways (RPD within protocol limits).`
       );
     }
   } else {
-    lines.push('- *Run both Coagulation and Phenoloxidase assays to evaluate orthogonal agreement.*');
+    lines.push('- *Run both Coagulation and Phenoloxidase assays to evaluate cross-assay comparison.*');
   }
   lines.push('');
 
   // 4. Student Takeaway
-  lines.push('### 🎓 Key Takeaway');
+  lines.push('### 📋 Analysis Takeaway');
   if (aboveCoag.length === 0 && discordantSamples.length === 0) {
     lines.push(
-      'All test fluids passed within specification with strong cross-assay agreement. Both the clotting and enzymatic defense systems confirm low pyrogen levels.'
+      `All evaluated samples produced estimates below the configured study threshold (${threshold.toFixed(2)} EU/mL) with acceptable cross-assay concordance across matched pairs.`
     );
   } else {
     lines.push(
-      `Samples requiring attention: ${[...aboveCoag.map((s) => `${s.name} (high EU)`), ...discordantSamples.map((d) => `${d.name} (discordant)`)].join(', ')}. Document these in your lab notebook and verify with duplicate dilution tests.`
+      `Analytical review advised for: ${[...aboveCoag.map((s) => `${s.name} (above threshold)`), ...discordantSamples.map((d) => `${d.name} (discordant)`)].join(', ')}. Verify findings with duplicate dilution testing.`
     );
   }
 

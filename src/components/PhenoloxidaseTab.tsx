@@ -129,6 +129,10 @@ export const PhenoloxidaseTab: React.FC<PhenoloxidaseTabProps> = ({
       ...prev,
       {
         id: nextId,
+        sampleId:
+          type === 'standard'
+            ? `STD${prev.filter((r) => r.type === 'standard').length}`
+            : `S${prev.filter((r) => r.type === 'sample').length + 1}`,
         name:
           type === 'standard'
             ? `Standard ${prev.filter((r) => r.type === 'standard').length + 1}`
@@ -144,7 +148,7 @@ export const PhenoloxidaseTab: React.FC<PhenoloxidaseTabProps> = ({
 
   const handleDeleteRow = (id: string) => {
     if (rows.length <= 1) {
-      setRows([{ id: 'k1', name: '', type: 'sample', readings: {} }]);
+      setRows([{ id: 'k1', sampleId: 'S1', name: '', type: 'sample', readings: {} }]);
       return;
     }
     setRows((prev) => prev.filter((r) => r.id !== id));
@@ -200,7 +204,7 @@ export const PhenoloxidaseTab: React.FC<PhenoloxidaseTabProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           {setPoWavelength && (
             <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs shadow-2xs">
-              <span className="text-slate-500 dark:text-slate-400 font-medium">&lambda; (nm):</span>
+              <span className="text-slate-500 dark:text-slate-400 font-medium">Doc &lambda; (nm):</span>
               <input
                 type="number"
                 value={poWavelength}
@@ -209,8 +213,9 @@ export const PhenoloxidaseTab: React.FC<PhenoloxidaseTabProps> = ({
                   setPoWavelength(Number.isFinite(val) ? val : 490);
                 }}
                 className="w-14 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-xs font-mono font-bold text-emerald-700 dark:text-emerald-400 outline-none text-center focus:ring-1 focus:ring-emerald-500"
-                title="Phenoloxidase wavelength in nm (documentation parameter only — pure linear regression is applied)"
+                title="Phenoloxidase wavelength in nm (documentation metadata only — does not alter regression calculations)"
               />
+              <span className="text-[10px] text-slate-400 font-normal hidden sm:inline">(metadata)</span>
             </div>
           )}
 
@@ -617,7 +622,7 @@ export const PhenoloxidaseTab: React.FC<PhenoloxidaseTabProps> = ({
                 Both Coagulation &amp; Phenoloxidase Endotoxin Estimates Are Ready!
               </h4>
               <p className="text-xs text-emerald-700 dark:text-emerald-400">
-                You can now perform cross-assay concordance validation to compare estimated concentrations.
+                You can now perform exploratory cross-assay method comparison between the two detection pathways.
               </p>
             </div>
           </div>
@@ -626,7 +631,7 @@ export const PhenoloxidaseTab: React.FC<PhenoloxidaseTabProps> = ({
             className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs"
           >
             <GitCompare className="w-3.5 h-3.5" />
-            View Cross-Assay Comparison
+            View Exploratory Comparison
           </button>
         </div>
       )}

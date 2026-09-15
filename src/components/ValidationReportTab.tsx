@@ -27,17 +27,21 @@ import {
   AlertCircle,
   Loader2,
   Cpu,
+  BookOpen,
+  ExternalLink,
 } from 'lucide-react';
 import { generateAnalyticalInterpretation } from '../utils/analyticalFallback';
 
 interface ValidationReportTabProps {
   runLabel: string;
+  experimentId?: string;
   calibration: CalibrationModelFit | null;
   results: SampleEstimateResult[];
   kineticResults?: KineticResult[];
   kineticModel?: KineticCalibrationModel | null;
   comparisons?: AssayComparisonItem[];
   threshold: number;
+  thresholdBasis?: string;
   wavelengths?: WavelengthSettings;
   onPrint: () => void;
   onDownloadCoagCsv?: () => void;
@@ -47,12 +51,14 @@ interface ValidationReportTabProps {
 
 export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
   runLabel,
+  experimentId = 'EXP-AM-2026-001',
   calibration,
   results,
   kineticResults = [],
   kineticModel = null,
   comparisons = [],
   threshold,
+  thresholdBasis = 'Investigational research decision threshold',
   wavelengths = { coagulation: 540, phenoloxidase: 490 },
   onPrint,
   onDownloadCoagCsv,
@@ -116,6 +122,24 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
   const [explanationError, setExplanationError] = useState<string | null>(null);
   const [isFallbackExplanation, setIsFallbackExplanation] = useState(false);
   const [sourceModel, setSourceModel] = useState<string>('');
+
+  // N2: Supporting-Literature Lookup state
+  const [isLoadingLiterature, setIsLoadingLiterature] = useState(false);
+  const [literatureData, setLiteratureData] = useState<{
+    papers: Array<{
+      title: string;
+      authors?: string[];
+      year?: number;
+      abstract?: string;
+      url?: string;
+      citationCount?: number;
+    }>;
+    synthesis: string;
+    query: string;
+    isRateLimited: boolean;
+    retrievalSource: string;
+  } | null>(null);
+  const [literatureError, setLiteratureError] = useState<string | null>(null);
 
   const currentDate = new Date().toLocaleDateString('en-US', {
     year: 'numeric',
@@ -242,6 +266,40 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
     }
   };
 
+  const handleLookupLiterature = async () => {
+    setIsLoadingLiterature(true);
+    setLiteratureError(null);
+    try {
+      const response = await fetch('/api/lookup-literature', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: 'Archachatina marginata hemolymph endotoxin detection phenoloxidase coagulation',
+          assayContext: {
+            coagWavelength: wavelengths.coagulation,
+            poWavelength: wavelengths.phenoloxidase,
+            coagR2: calibration?.r2,
+            poR2: kineticModel?.r2,
+            sampleCount: results.length,
+            threshold: threshold,
+            thresholdBasis: thresholdBasis,
+          },
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to complete literature retrieval');
+      }
+      setLiteratureData(data);
+    } catch (err: any) {
+      console.error('Literature lookup error:', err);
+      setLiteratureError(err?.message || 'Failed to complete supporting literature lookup');
+    } finally {
+      setIsLoadingLiterature(false);
+    }
+  };
+
   const generateSummaryText = () => {
     if (!hasCoag && !hasPo) {
       return 'No calibration curve or kinetic assays computed yet. Please complete the Standard Curve or Phenoloxidase tabs.';
@@ -291,10 +349,10 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-100 dark:border-slate-800 pb-2">
           <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
             <UserCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            Dossier Signatory &amp; Approval Setup
+            Reviewer &amp; Analyst Attribution Setup (Metadata Only — Non-authenticated)
           </span>
           <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-            Populates student/supervisor signature lines below (saved in local storage)
+            Populates research attribution lines below (saved in local storage; not a regulatory signature)
           </span>
         </div>
 
@@ -339,7 +397,7 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
 
           <div>
             <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
-              Supervisor Approval Date
+              Supervisor Review Date
             </label>
             <input
               type="date"
@@ -368,7 +426,7 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
-              Full Multi-Assay Dossier
+              Full Research Analysis Report
             </button>
             <button
               onClick={() => setReportScope('coag')}
@@ -399,7 +457,7 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
-                Concordance Only
+                Method Comparison Only
               </button>
             )}
           </div>
@@ -412,7 +470,7 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
                 onChange={(e) => setShowComparison(e.target.checked)}
                 className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300 dark:border-slate-700 focus:ring-indigo-500"
               />
-              <span>Include Dual-Assay Comparison Section</span>
+              <span>Include Exploratory Method Comparison Section</span>
             </label>
           )}
         </div>
@@ -424,7 +482,7 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
             onClick={handleExplainResult}
             disabled={isLoadingExplanation}
             className="px-3.5 py-2 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold shadow-2xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            title="Generate plain-language explanation of assay status and concordance"
+            title="Generate plain-language explanation of assay status and method comparison"
           >
             {isLoadingExplanation ? (
               <>
@@ -433,6 +491,26 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
               </>
             ) : (
               <span>Explain Result</span>
+            )}
+          </button>
+
+          {/* Supporting Literature Lookup Button */}
+          <button
+            onClick={handleLookupLiterature}
+            disabled={isLoadingLiterature}
+            className="px-3.5 py-2 bg-teal-50 dark:bg-teal-950/50 hover:bg-teal-100 dark:hover:bg-teal-900/60 border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 rounded-lg text-xs font-bold shadow-2xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            title="Search Semantic Scholar and synthesize supporting published literature"
+          >
+            {isLoadingLiterature ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-600 dark:text-teal-400" />
+                <span>Searching Literature...</span>
+              </>
+            ) : (
+              <>
+                <BookOpen className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                <span>See Supporting Literature</span>
+              </>
             )}
           </button>
 
@@ -476,7 +554,7 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
                     className="w-full text-left px-3.5 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer border-t border-slate-100 dark:border-slate-700"
                   >
                     <GitCompare className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                    <span>Download Concordance CSV</span>
+                    <span>Download Method Comparison CSV</span>
                   </button>
                 )}
               </div>
@@ -500,30 +578,76 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
             <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400">
               <FlaskConical className="w-6 h-6 shrink-0" />
               <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                Endotoxin Kit —{' '}
                 {reportScope === 'coag'
-                  ? 'Coagulation Assay Report'
+                  ? 'Coagulation Assay Research Report'
                   : reportScope === 'po'
-                  ? 'Phenoloxidase Kinetic Report'
+                  ? 'Phenoloxidase Kinetic Research Report'
                   : reportScope === 'compare'
-                  ? 'Orthogonal Concordance Report'
-                  : 'Comprehensive Assay & Validation Dossier'}
+                  ? 'Exploratory Method Comparison Report'
+                  : 'Research Analysis Report'}
               </h1>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-              <em>Archachatina marginata</em> hemolymph assay · Student research study · &lambda;<sub>coag</sub>={wavelengths.coagulation}nm &bull; &lambda;<sub>PO</sub>={wavelengths.phenoloxidase}nm
+              <em>Archachatina marginata</em> hemolymph bioassay &bull; Research &amp; Educational Study &bull; &lambda;<sub>coag</sub>={wavelengths.coagulation}nm &bull; &lambda;<sub>PO</sub>={wavelengths.phenoloxidase}nm
             </p>
           </div>
           <div className="text-left sm:text-right space-y-0.5 text-xs">
             <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">
-              Run Identifier
+              Run ID &bull; Experiment ID
             </div>
             <div className="font-semibold text-slate-900 dark:text-slate-100 num text-sm">
-              {runLabel || 'Run 1'}
+              {runLabel || 'Run 1'} &bull; <span className="font-mono text-indigo-600 dark:text-indigo-400 text-xs">{experimentId}</span>
             </div>
             <div className="text-slate-500 dark:text-slate-400 num">{currentDate}</div>
           </div>
         </header>
+
+        {/* Regulatory & Proof-of-Concept Neutrality Disclaimer Notice */}
+        <div className="p-3 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-200">
+          <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="text-[11px] leading-relaxed">
+            <strong>Research &amp; Proof-of-Concept Statement:</strong> This application is a research and educational analysis tool. It does not establish clinical, regulatory, pharmacopeial, product-release, or patient-safety conclusions.
+          </div>
+        </div>
+
+        {/* Comprehensive Metadata Header Grid (Section M) */}
+        <section className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg p-3.5 text-xs grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Run &amp; Experiment ID</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-200">{runLabel || 'Run 1'} / {experimentId}</span>
+          </div>
+          <div>
+            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Analysis Date / Time</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-200">{currentDate}</span>
+          </div>
+          <div>
+            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Assay System</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-200">Coag ({wavelengths.coagulation} nm) &amp; PO ({wavelengths.phenoloxidase} nm)</span>
+          </div>
+          <div>
+            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Calibration Fit &amp; Range</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-200">
+              {calibration ? `${calibration.type.toUpperCase()} (${calibration.xMin.toFixed(2)}–${calibration.xMax.toFixed(2)} EU/mL)` : 'Not fitted'}
+            </span>
+          </div>
+          <div>
+            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Study Decision Threshold</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-200">{threshold.toFixed(2)} EU/mL</span>
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate" title={thresholdBasis}>Basis: {thresholdBasis}</span>
+          </div>
+          <div>
+            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Sample Count (n)</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-200">{results.length} unknowns ({validKinetic.length} kinetic)</span>
+          </div>
+          <div>
+            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Software Version</span>
+            <span className="font-semibold font-mono text-slate-800 dark:text-slate-200">v2.4.0 (Research Edition)</span>
+          </div>
+          <div>
+            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Evaluation Framework</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-200">Exploratory Method Comparison</span>
+          </div>
+        </section>
 
         {/* Executive Summary */}
         <section className="bg-indigo-50/60 dark:bg-indigo-950/30 border-l-4 border-indigo-600 p-4 rounded-r-lg avoid-break print-compact-space">
@@ -816,7 +940,7 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
           <section className="space-y-3 avoid-break print-compact-space">
             <h2 className="text-xs uppercase tracking-wider text-indigo-900 dark:text-indigo-200 font-bold avoid-break-after flex items-center gap-1.5">
               <GitCompare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-              {reportScope === 'all' ? '4. ' : ''}Dual-Assay Orthogonal Cross-Validation (Coagulation vs. Phenoloxidase)
+              {reportScope === 'all' ? '4. ' : ''}Exploratory Cross-Assay Method Comparison (Coagulation vs. Phenoloxidase)
             </h2>
             <DualAssayComparisonSection
               comparisons={comparisons}
@@ -826,8 +950,9 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
           </section>
         )}
 
-        {/* SECTION 4: AI-POWERED "EXPLAIN THIS RESULT" COMMENTARY PANEL */}
-        <section className="avoid-break space-y-3 pt-2">
+        {/* SECTION 4: PLAIN-LANGUAGE EXPLAINER & SUPPORTING LITERATURE */}
+        <section className="avoid-break space-y-4 pt-2">
+          {/* N1: Plain-Language Result Explainer */}
           {explanationText ? (
             <div className="bg-slate-50/80 dark:bg-slate-800/60 border border-indigo-200 dark:border-indigo-800/70 rounded-xl p-4 sm:p-5 space-y-3 shadow-2xs">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-100 dark:border-indigo-900/60 pb-2">
@@ -841,13 +966,13 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
                   </div>
                   <div>
                     <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-950 dark:text-indigo-200 flex items-center gap-2">
-                      <span>Analytical Interpretation Commentary</span>
+                      <span>AI-Generated Plain-Language Summary of Your Results</span>
                       <span className="text-[10px] font-mono font-medium px-2 py-0.2 rounded-full border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-850 text-indigo-600 dark:text-indigo-300">
                         {isFallbackExplanation ? 'Local Rule Engine' : 'Gemini AI'}
                       </span>
                     </h3>
                     <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                      Plain-language synthesis of assay concordance, kinetics, and threshold confidence
+                      Grounded synthesis of calculated regression fits, enzyme rates, and sample threshold statuses
                     </p>
                   </div>
                 </div>
@@ -857,7 +982,7 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
                     onClick={handleExplainResult}
                     disabled={isLoadingExplanation}
                     className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200 flex items-center gap-1 cursor-pointer transition px-2 py-1 rounded hover:bg-indigo-50 dark:hover:bg-slate-750"
-                    title="Refresh AI interpretation"
+                    title="Refresh plain-language summary"
                   >
                     <RefreshCw className={`w-3 h-3 ${isLoadingExplanation ? 'animate-spin' : ''}`} />
                     <span>Refresh</span>
@@ -884,6 +1009,34 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
                 </div>
               )}
 
+              {/* Underlying Deterministic Stats Grid */}
+              <div className="bg-white dark:bg-slate-900/70 p-3 rounded-lg border border-slate-200 dark:border-slate-750 grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-[11px]">
+                <div>
+                  <span className="text-slate-400 text-[10px] block font-semibold uppercase">Coagulation Fit</span>
+                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                    R² = {calibration?.r2?.toFixed?.(4) ?? 'N/A'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] block font-semibold uppercase">PO Sensitivity</span>
+                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                    {kineticModel?.slope ? `${kineticModel.slope.toFixed(4)} OD/min/EU` : 'N/A'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] block font-semibold uppercase">Study Threshold</span>
+                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                    {threshold.toFixed(2)} EU/mL
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] block font-semibold uppercase">Sample Status</span>
+                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                    {results.filter(r => r.eu !== null && r.eu < threshold).length} below / {results.filter(r => r.eu !== null && r.eu >= threshold).length} above
+                  </span>
+                </div>
+              </div>
+
               {/* Formatted Markdown Body */}
               <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed prose prose-sm dark:prose-invert max-w-none space-y-2">
                 <div className="markdown-body">
@@ -894,17 +1047,17 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
               {/* Permanent small disclaimer */}
               <div className="pt-2 border-t border-slate-200/80 dark:border-slate-700/80 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 italic">
                 <Info className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
-                <span>Interpretation commentary — for academic research proof-of-concept and student bioassay evaluation only. Not a certified diagnostic.</span>
+                <span>AI-generated plain-language summary of your results — based solely on calculated parameters. Research analysis only.</span>
               </div>
             </div>
           ) : isLoadingExplanation ? (
             <div className="p-6 bg-slate-50/70 dark:bg-slate-800/50 border border-indigo-200/60 dark:border-indigo-800/60 rounded-xl text-center space-y-2.5">
               <Loader2 className="w-6 h-6 animate-spin text-indigo-600 dark:text-indigo-400 mx-auto" />
               <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                Synthesizing assay metrics with Gemini AI...
+                Generating plain-language summary of results...
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-                Evaluating coagulation regression, PO kinetic velocities, and dual-assay concordance statuses without medical claims.
+                Evaluating coagulation regression, PO kinetic velocities, and exploratory method comparison metrics.
               </p>
             </div>
           ) : explanationError ? (
@@ -937,10 +1090,10 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
             <div className="no-print p-4 bg-slate-50/60 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="space-y-0.5">
                 <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                  Generate Plain-Language Analytical Interpretation
+                  Generate Plain-Language Summary of Results
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Provides a structured explanation of sample statuses, PO rates, and concordance confidence to include in this report.
+                  Produces a structured plain-language summary of sample findings and method comparison metrics grounded in the numerical data.
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
@@ -953,45 +1106,176 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
               </div>
             </div>
           )}
+
+          {/* N2: Supporting-Literature Lookup Panel */}
+          {literatureData ? (
+            <div className="bg-teal-50/50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800/70 rounded-xl p-4 sm:p-5 space-y-4 shadow-2xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-teal-200/70 dark:border-teal-900/60 pb-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1 rounded-md bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300">
+                    <BookOpen className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-teal-950 dark:text-teal-200 flex items-center gap-2">
+                      <span>External Literature (via Semantic Scholar) — Not Generated by This Tool's Analysis</span>
+                    </h3>
+                    <p className="text-[10px] text-teal-700 dark:text-teal-400">
+                      Peer-reviewed literature retrieved to contextualize Archachatina marginata hemolymph bioassay mechanisms
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleLookupLiterature}
+                  disabled={isLoadingLiterature}
+                  className="no-print text-[11px] font-semibold text-teal-700 dark:text-teal-300 hover:text-teal-900 dark:hover:text-teal-100 flex items-center gap-1 cursor-pointer transition px-2 py-1 rounded hover:bg-teal-100/60 dark:hover:bg-teal-900/40"
+                  title="Refresh literature search"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isLoadingLiterature ? 'animate-spin' : ''}`} />
+                  <span>Re-search</span>
+                </button>
+              </div>
+
+              {literatureData.isRateLimited && (
+                <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-200 flex items-center gap-2">
+                  <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>
+                    Semantic Scholar public API query limit reached; literature synthesis generated using verified reference index.
+                  </span>
+                </div>
+              )}
+
+              {/* Synthesized Literature Discussion */}
+              <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed prose prose-sm dark:prose-invert max-w-none space-y-2 bg-white/70 dark:bg-slate-900/60 p-3.5 rounded-lg border border-teal-100 dark:border-teal-900/50">
+                <div className="markdown-body">
+                  <Markdown>{literatureData.synthesis}</Markdown>
+                </div>
+              </div>
+
+              {/* Retrieved Papers List */}
+              <div className="space-y-2">
+                <h4 className="text-[11px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                  Referenced Publications ({literatureData.papers.length})
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                  {literatureData.papers.map((p, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 text-xs space-y-1 hover:border-teal-300 dark:hover:border-teal-700 transition"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="font-semibold text-slate-900 dark:text-slate-100 leading-snug">
+                          {p.title}
+                        </div>
+                        {p.url && (
+                          <a
+                            href={p.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-teal-600 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-200 shrink-0 mt-0.5"
+                            title="Open paper in Semantic Scholar"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                        <span>{p.authors?.slice(0, 2).join(', ')}{p.authors && p.authors.length > 2 ? ' et al.' : ''}</span>
+                        {p.year && <span>&bull; {p.year}</span>}
+                        {p.citationCount !== undefined && <span>&bull; {p.citationCount} citations</span>}
+                      </div>
+                      {p.abstract && (
+                        <p className="text-[10px] text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed mt-1">
+                          {p.abstract}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-teal-200/60 dark:border-teal-900/60 text-[10px] text-slate-500 dark:text-slate-400 italic">
+                Source: {literatureData.retrievalSource} &bull; Retrieved for educational context &bull; Does not constitute regulatory validation
+              </div>
+            </div>
+          ) : isLoadingLiterature ? (
+            <div className="p-6 bg-slate-50/70 dark:bg-slate-800/50 border border-teal-200/60 dark:border-teal-800/60 rounded-xl text-center space-y-2.5">
+              <Loader2 className="w-6 h-6 animate-spin text-teal-600 dark:text-teal-400 mx-auto" />
+              <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                Searching Semantic Scholar &amp; synthesizing supporting literature...
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                Querying published papers on gastropod hemolymph, prophenoloxidase cascade, and endotoxin detection.
+              </p>
+            </div>
+          ) : literatureError ? (
+            <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl space-y-2">
+              <div className="flex items-center gap-2 text-rose-700 dark:text-rose-300 text-xs font-bold">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>Literature Lookup Notice</span>
+              </div>
+              <p className="text-xs text-rose-600 dark:text-rose-300 leading-relaxed">
+                {literatureError}
+              </p>
+              <button
+                onClick={handleLookupLiterature}
+                className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-semibold hover:bg-rose-700 transition cursor-pointer flex items-center gap-1 shadow-xs"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Retry Literature Search</span>
+              </button>
+            </div>
+          ) : null}
         </section>
 
-        {/* Signatures Block */}
-        <section className="pt-6 border-t-2 border-slate-200 dark:border-slate-700 grid grid-cols-2 gap-8 sm:gap-16 avoid-break">
+        {/* Section 5: Reviewer & Analyst Attribution (Metadata Only — Non-authenticated) */}
+        <section className="pt-6 border-t-2 border-slate-200 dark:border-slate-700 space-y-3 avoid-break">
           <div>
-            <div className="min-h-9 border-b border-slate-400 dark:border-slate-500 flex items-end pb-1">
-              <span className="text-xs font-mono font-bold text-slate-900 dark:text-slate-100">
-                {analystName.trim() || '______________________________'}
-              </span>
-            </div>
-            <div className="mt-2 text-xs font-bold text-slate-900 dark:text-slate-100">
-              Student / Analyst Signature
-            </div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5 flex items-center gap-1.5">
-              <span>{analystName.trim() ? analystName.trim() : 'Name not entered'}</span>
-              <span className="text-slate-300 dark:text-slate-600">·</span>
-              <span>{analystDate || currentDate}</span>
-            </div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+              Reviewer &amp; Analyst Attribution (Metadata Only — Non-authenticated)
+            </h3>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400">
+              Note: Signer fields represent study workflow metadata only and do not constitute authenticated digital signatures or regulatory release certifications.
+            </p>
           </div>
-          <div>
-            <div className="min-h-9 border-b border-slate-400 dark:border-slate-500 flex items-end pb-1">
-              <span className="text-xs font-mono font-bold text-slate-900 dark:text-slate-100">
-                {supervisorName.trim() || '______________________________'}
-              </span>
+
+          <div className="grid grid-cols-2 gap-8 sm:gap-16 pt-3">
+            <div>
+              <div className="min-h-9 border-b border-slate-400 dark:border-slate-500 flex items-end pb-1">
+                <span className="text-xs font-mono font-bold text-slate-900 dark:text-slate-100">
+                  {analystName.trim() || '______________________________'}
+                </span>
+              </div>
+              <div className="mt-2 text-xs font-bold text-slate-900 dark:text-slate-100">
+                Student / Analyst Attribution
+              </div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5 flex items-center gap-1.5">
+                <span>{analystName.trim() ? analystName.trim() : 'Name not entered'}</span>
+                <span className="text-slate-300 dark:text-slate-600">·</span>
+                <span>{analystDate || currentDate}</span>
+              </div>
             </div>
-            <div className="mt-2 text-xs font-bold text-slate-900 dark:text-slate-100">
-              Supervisor Approval
-            </div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5 flex items-center gap-1.5">
-              <span>{supervisorName.trim() ? supervisorName.trim() : 'Name not entered'}</span>
-              <span className="text-slate-300 dark:text-slate-600">·</span>
-              <span>{supervisorDate || currentDate}</span>
+            <div>
+              <div className="min-h-9 border-b border-slate-400 dark:border-slate-500 flex items-end pb-1">
+                <span className="text-xs font-mono font-bold text-slate-900 dark:text-slate-100">
+                  {supervisorName.trim() || '______________________________'}
+                </span>
+              </div>
+              <div className="mt-2 text-xs font-bold text-slate-900 dark:text-slate-100">
+                Supervisor Review Attribution
+              </div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5 flex items-center gap-1.5">
+                <span>{supervisorName.trim() ? supervisorName.trim() : 'Name not entered'}</span>
+                <span className="text-slate-300 dark:text-slate-600">·</span>
+                <span>{supervisorDate || currentDate}</span>
+              </div>
             </div>
           </div>
         </section>
 
         {/* Footer */}
         <footer className="pt-4 text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-semibold border-t border-slate-100 dark:border-slate-800 text-center avoid-break">
-          Archachatina marginata Endotoxin Research Suite · Proof-of-concept tool
+          Archachatina marginata Endotoxin Research Suite · Proof-of-concept research &amp; educational tool
         </footer>
       </article>
     </div>

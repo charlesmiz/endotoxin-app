@@ -328,7 +328,7 @@ export const LabManualModal: React.FC<LabManualModalProps> = ({
               </div>
 
               <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 rounded-xl text-indigo-900 dark:text-indigo-200 text-xs">
-                <strong>In this tool:</strong> The Fit Quality card and Validation Report now display the complete <strong>Regression ANOVA Table</strong> (SS_Reg, SS_Res, F-ratio, and p-value) alongside the R&sup2; coefficient of determination for full academic and regulatory compliance!
+                <strong>In this tool:</strong> The Fit Quality card and Validation Report display the complete <strong>Regression ANOVA Table</strong> (SS_Reg, SS_Res, F-ratio, and p-value) alongside the R&sup2; coefficient of determination for methodological rigor and statistical transparency.
               </div>
             </div>
           )}
@@ -346,15 +346,15 @@ export const LabManualModal: React.FC<LabManualModalProps> = ({
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[11px]">
-                      <span className="font-bold text-emerald-800 dark:text-emerald-300">PASS (≤ 0.500 EU/mL):</span>
+                      <span className="font-bold text-emerald-800 dark:text-emerald-300">Below Study Threshold (≤ configured threshold):</span>
                       <p className="text-emerald-700 dark:text-emerald-400 mt-0.5">
-                        Sample complies with pharmacopeial intravenous fluid safety specifications. Safe pyrogen limit.
+                        Sample concentration is below the configured study decision cut-off. Analytical validity is evaluated independently.
                       </p>
                     </div>
                     <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-[11px]">
-                      <span className="font-bold text-rose-800 dark:text-rose-300">FLAGGED (&gt; 0.500 EU/mL):</span>
+                      <span className="font-bold text-rose-800 dark:text-rose-300">Above Study Threshold (&gt; configured threshold):</span>
                       <p className="text-rose-700 dark:text-rose-400 mt-0.5">
-                        Sample exceeds pyrogen safety threshold. Potential risk of febrile endotoxemia; re-test or reject batch.
+                        Sample concentration exceeds the configured study decision cut-off. Confirmatory re-test or investigational follow-up recommended.
                       </p>
                     </div>
                     <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px]">
@@ -449,7 +449,7 @@ export const LabManualModal: React.FC<LabManualModalProps> = ({
                   What should I do if my calibration curve has $R^2 &lt; 0.90$?
                 </div>
                 <p className="text-slate-600 dark:text-slate-400 text-[11px]">
-                  Check for pipetting air bubbles, verify the blank baseline reading, or re-run duplicate replicates. Standard curve linearity $R^2 \ge 0.90$ is recommended before estimating unknown clinical samples.
+                  Check for pipetting air bubbles, verify the blank baseline reading, or re-run duplicate replicates. Standard curve linearity $R^2 \ge 0.90$ is recommended before estimating unknown investigational test samples.
                 </p>
               </div>
 

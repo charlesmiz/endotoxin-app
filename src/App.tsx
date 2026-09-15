@@ -17,6 +17,8 @@ import {
   computeKineticRates,
   computeAssayComparison,
 } from './utils/math';
+import { formatCoagulationCsv, formatKineticCsv, formatComparisonCsv } from './utils/csv';
+import { DETERMINISTIC_STUDY_FIXTURE } from './data/studyFixtures';
 import { Header } from './components/Header';
 import { StandardCurveTab } from './components/StandardCurveTab';
 import { SampleEstimatorTab } from './components/SampleEstimatorTab';
@@ -36,9 +38,9 @@ const EMPTY_CAL_ROWS: CalibrationRow[] = [
 ];
 
 const EMPTY_SAMPLE_ROWS: SampleRow[] = [
-  { id: 's1', name: '', abs: '', replicates: '' },
-  { id: 's2', name: '', abs: '', replicates: '' },
-  { id: 's3', name: '', abs: '', replicates: '' },
+  { id: 's1', sampleId: 'S1', name: '', abs: '', replicates: '', dilutionFactor: '1' },
+  { id: 's2', sampleId: 'S2', name: '', abs: '', replicates: '', dilutionFactor: '1' },
+  { id: 's3', sampleId: 'S3', name: '', abs: '', replicates: '', dilutionFactor: '1' },
 ];
 
 const EXAMPLE_CAL_ROWS: CalibrationRow[] = [
@@ -49,22 +51,23 @@ const EXAMPLE_CAL_ROWS: CalibrationRow[] = [
 ];
 
 const EXAMPLE_SAMPLE_ROWS: SampleRow[] = [
-  { id: 's1', name: 'Commercial Infusion A', abs: '0.082', replicates: '0.081, 0.083' },
-  { id: 's2', name: 'Sterile Water Control', abs: '0.008', replicates: '' },
-  { id: 's3', name: 'Commercial Infusion B', abs: '0.310', replicates: '0.308, 0.312' },
+  { id: 's1', sampleId: 'S1', name: 'Commercial Infusion A', abs: '0.082', replicates: '0.081, 0.083', dilutionFactor: '1' },
+  { id: 's2', sampleId: 'S2', name: 'Sterile Water Control', abs: '0.008', replicates: '', dilutionFactor: '1' },
+  { id: 's3', sampleId: 'S3', name: 'Commercial Infusion B', abs: '0.310', replicates: '0.308, 0.312', dilutionFactor: '1' },
 ];
 
 const DEFAULT_TIME_POINTS = [0, 2, 4, 6, 8, 10];
 
 const EMPTY_KINETIC_ROWS: KineticSampleRow[] = [
-  { id: 'k1', name: '', type: 'standard', standardEu: '0.0', readings: {} },
-  { id: 'k2', name: '', type: 'standard', standardEu: '1.0', readings: {} },
-  { id: 'k3', name: '', type: 'sample', readings: {} },
+  { id: 'k1', sampleId: 'STD0', name: '', type: 'standard', standardEu: '0.0', readings: {} },
+  { id: 'k2', sampleId: 'STD1', name: '', type: 'standard', standardEu: '1.0', readings: {} },
+  { id: 'k3', sampleId: 'S1', name: '', type: 'sample', readings: {} },
 ];
 
 const EXAMPLE_KINETIC_ROWS: KineticSampleRow[] = [
   {
     id: 'k_std0',
+    sampleId: 'STD0',
     name: 'Standard Blank 0.0 EU',
     type: 'standard',
     standardEu: '0.0',
@@ -72,6 +75,7 @@ const EXAMPLE_KINETIC_ROWS: KineticSampleRow[] = [
   },
   {
     id: 'k_std1',
+    sampleId: 'STD1',
     name: 'Standard 0.5 EU/mL',
     type: 'standard',
     standardEu: '0.5',
@@ -79,6 +83,7 @@ const EXAMPLE_KINETIC_ROWS: KineticSampleRow[] = [
   },
   {
     id: 'k_std2',
+    sampleId: 'STD2',
     name: 'Standard 2.0 EU/mL',
     type: 'standard',
     standardEu: '2.0',
@@ -86,6 +91,7 @@ const EXAMPLE_KINETIC_ROWS: KineticSampleRow[] = [
   },
   {
     id: 'k_std3',
+    sampleId: 'STD3',
     name: 'Standard 5.0 EU/mL',
     type: 'standard',
     standardEu: '5.0',
@@ -93,18 +99,21 @@ const EXAMPLE_KINETIC_ROWS: KineticSampleRow[] = [
   },
   {
     id: 'k_s1',
+    sampleId: 'S1',
     name: 'Commercial Infusion A',
     type: 'sample',
     readings: { 0: '0.025', 2: '0.038', 4: '0.052', 6: '0.065', 8: '0.078', 10: '0.091' },
   },
   {
     id: 'k_s2',
+    sampleId: 'S2',
     name: 'Sterile Water Control',
     type: 'sample',
     readings: { 0: '0.010', 2: '0.011', 4: '0.010', 6: '0.012', 8: '0.011', 10: '0.013' },
   },
   {
     id: 'k_s3',
+    sampleId: 'S3',
     name: 'Commercial Infusion B',
     type: 'sample',
     readings: { 0: '0.035', 2: '0.089', 4: '0.143', 6: '0.197', 8: '0.251', 10: '0.305' },
@@ -211,8 +220,8 @@ export default function App() {
     }
 
     const fit = chooseModel(pts, model);
-    if (fit.type === 'linear' && (!Number.isFinite(fit.slope) || Math.abs(fit.slope!) < 1e-9)) {
-      alert('Calibration rejected: Absorbance slope is zero or undefined.');
+    if (!fit.isValidCalibration) {
+      alert(`Calibration rejected: ${fit.validationErrors?.join('; ') || 'Invalid calibration curve.'}`);
       return;
     }
 
@@ -240,27 +249,33 @@ export default function App() {
     }
 
     const validSamples: {
+      id?: string;
+      sampleId?: string;
       name: string;
       abs: number;
       sd: number;
       cv: number;
       n: number;
       replicates: number[];
+      dilutionFactor?: number;
     }[] = [];
 
-    sampleRows.forEach((row) => {
+    sampleRows.forEach((row, idx) => {
       const meanAbs = parseFloat(row.abs);
       if (!row.name.trim() || !Number.isFinite(meanAbs)) return;
 
       const summary = summarizeReplicates(meanAbs, row.replicates);
       if (Number.isFinite(summary.mean)) {
         validSamples.push({
+          id: row.id,
+          sampleId: row.sampleId || `S${idx + 1}`,
           name: row.name.trim(),
           abs: summary.mean,
           sd: summary.sd,
           cv: summary.cv,
           n: summary.n,
           replicates: summary.values,
+          dilutionFactor: row.dilutionFactor ? parseFloat(row.dilutionFactor) : 1,
         });
       }
     });
@@ -270,35 +285,40 @@ export default function App() {
       return;
     }
 
-    const estimates = computeSampleEstimates(calibration, validSamples);
+    const estimates = computeSampleEstimates(calibration, validSamples, threshold, runLabel);
     setSampleResults(estimates);
   };
 
-  // Keep estimates updated if calibration changes
+  // Keep estimates updated whenever calibration, sampleRows, threshold, or runLabel changes
   useEffect(() => {
     if (calibration) {
       const validSamples = sampleRows
-        .map((row) => {
+        .map((row, idx) => {
           const meanAbs = parseFloat(row.abs);
           if (!row.name.trim() || !Number.isFinite(meanAbs)) return null;
           const summary = summarizeReplicates(meanAbs, row.replicates);
           if (!Number.isFinite(summary.mean)) return null;
           return {
+            id: row.id,
+            sampleId: row.sampleId || `S${idx + 1}`,
             name: row.name.trim(),
             abs: summary.mean,
             sd: summary.sd,
             cv: summary.cv,
             n: summary.n,
             replicates: summary.values,
+            dilutionFactor: row.dilutionFactor ? parseFloat(row.dilutionFactor) : 1,
           };
         })
         .filter((v): v is NonNullable<typeof v> => v !== null);
 
       if (validSamples.length > 0) {
-        setSampleResults(computeSampleEstimates(calibration, validSamples));
+        setSampleResults(computeSampleEstimates(calibration, validSamples, threshold, runLabel));
+      } else {
+        setSampleResults([]);
       }
     }
-  }, [calibration]);
+  }, [calibration, sampleRows, threshold, runLabel]);
 
   // Compute Phenoloxidase Kinetic Rates & Standard Curve
   const handleComputeKinetics = () => {
@@ -308,7 +328,7 @@ export default function App() {
       return;
     }
 
-    const { results, model: fittedModel } = computeKineticRates(timePoints, validRows);
+    const { results, model: fittedModel } = computeKineticRates(timePoints, validRows, threshold, runLabel);
     const validCount = results.filter((r) => r.valid).length;
     if (validCount === 0) {
       alert('Could not compute kinetics: Please ensure at least 2 time points have valid numerical absorbance readings.');
@@ -354,47 +374,53 @@ export default function App() {
     setKineticModel(fittedModel);
   };
 
-  // One-click dual-assay study loader
+  // One-click dual-assay study loader (deterministic, synchronous, zero-delay)
   const handleLoadFullDualAssayStudy = () => {
-    handleLoadExampleCal();
-    handleLoadExampleSamples();
-    handleLoadExampleKinetics();
+    const fixture = DETERMINISTIC_STUDY_FIXTURE;
+    setCalRows(fixture.calRows);
+    setSampleRows(fixture.sampleRows);
+    setTimePoints(fixture.timePoints);
+    setKineticRows(fixture.kineticRows);
 
-    // Auto-calculate calibration curve
-    setTimeout(() => {
-      const pts: [number, number][] = [
-        [0, 0.005],
-        [0.5, 0.048],
-        [2.0, 0.185],
-        [5.0, 0.452],
-      ];
-      const meta = pts.map(([eu, abs]) => ({
-        eu,
-        mean: abs,
-        sd: NaN,
-        cv: NaN,
-        n: 1,
-        replicates: [abs],
-      }));
-      const fit = chooseModel(pts, 'linear');
-      const newCal: CalibrationModelFit = {
-        ...fit,
-        model: 'linear',
-        requestedModel: 'linear',
-        points: pts,
-        meta,
-        xMin: 0,
-        xMax: 5,
+    const fit = chooseModel(fixture.calibrationPoints, 'linear');
+    const newCal: CalibrationModelFit = {
+      ...fit,
+      model: 'linear',
+      requestedModel: 'linear',
+      points: fixture.calibrationPoints,
+      meta: fixture.calibrationMeta,
+      xMin: 0,
+      xMax: 5,
+    };
+    setCalibration(newCal);
+
+    const validSamples = fixture.sampleRows.map((r, idx) => {
+      const absVal = parseFloat(r.abs);
+      const summary = summarizeReplicates(absVal, r.replicates);
+      return {
+        id: r.id,
+        sampleId: r.sampleId || `S${idx + 1}`,
+        name: r.name,
+        abs: summary.mean,
+        sd: summary.sd,
+        cv: summary.cv,
+        n: summary.n,
+        replicates: summary.values,
+        dilutionFactor: parseFloat(r.dilutionFactor || '1'),
       };
-      setCalibration(newCal);
+    });
 
-      const sampEstimates = computeSampleEstimates(newCal, [
-        { name: 'Commercial Infusion A', abs: 0.082, sd: 0.0014, cv: 1.7, n: 2, replicates: [0.081, 0.083] },
-        { name: 'Sterile Water Control', abs: 0.008, sd: NaN, cv: NaN, n: 1, replicates: [0.008] },
-        { name: 'Commercial Infusion B', abs: 0.310, sd: 0.0028, cv: 0.9, n: 2, replicates: [0.308, 0.312] },
-      ]);
-      setSampleResults(sampEstimates);
-    }, 50);
+    const sampEstimates = computeSampleEstimates(newCal, validSamples, threshold, runLabel);
+    setSampleResults(sampEstimates);
+
+    const { results: kResults, model: fittedModel } = computeKineticRates(
+      fixture.timePoints,
+      fixture.kineticRows,
+      threshold,
+      runLabel
+    );
+    setKineticResults(kResults);
+    setKineticModel(fittedModel);
   };
 
   const handleDownloadCsv = () => {
@@ -403,48 +429,16 @@ export default function App() {
       return;
     }
 
-    let csv =
-      'Sample,Mean Absorbance,Replicates,N,SD,CV %,Estimated EU/mL,Status,Extrapolated,Negative Estimate,Ambiguous,No Solution\n';
-
-    sampleResults.forEach((r) => {
-      const euText = Number.isFinite(r.eu) ? r.eu.toFixed(4) : 'undefined';
-      const status = r.invalidInput
-        ? 'Invalid input'
-        : r.noSolution
-        ? 'No solution in range'
-        : r.ambiguous
-        ? 'Ambiguous roots'
-        : r.eu >= threshold
-        ? 'Above threshold'
-        : 'Below threshold';
-
-      const rep =
-        r.replicates && r.replicates.length ? r.replicates.join(';') : '1 value';
-
-      csv += `"${r.name}",${r.abs},"${rep}",${r.n},${
-        Number.isFinite(r.sd) ? r.sd.toFixed(6) : ''
-      },${
-        Number.isFinite(r.cv) ? r.cv.toFixed(3) : ''
-      },${euText},${status},${r.outOfRange ? 'Yes' : 'No'},${
-        r.negativeEstimate ? 'Yes' : 'No'
-      },${r.ambiguous ? 'Yes' : 'No'},${r.noSolution ? 'Yes' : 'No'}\n`;
+    const csv = formatCoagulationCsv({
+      results: sampleResults,
+      calibration,
+      runLabel,
+      threshold,
+      thresholdBasis: 'Investigational Study Decision Threshold',
+      wavelength: wavelengths.coagulation,
     });
 
-    if (calibration) {
-      csv += `\nCalibration Model,${calibration.type}\n`;
-      if (calibration.type === 'linear') {
-        csv += `Equation,y = ${(calibration.slope ?? 0).toFixed(6)}x + ${(
-          calibration.intercept ?? 0
-        ).toFixed(6)}\n`;
-      } else {
-        csv += `Equation,y = ${(calibration.a ?? 0).toFixed(6)}x^2 + ${(
-          calibration.b ?? 0
-        ).toFixed(6)}x + ${(calibration.c ?? 0).toFixed(6)}\n`;
-      }
-      csv += `R-squared,${calibration.r2.toFixed(6)}\n`;
-    }
-
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -461,24 +455,15 @@ export default function App() {
       return;
     }
 
-    let csv = 'Type,Fraction / Sample,Kinetic Rate (dA/dt OD/min),Linearity (R2),Total Delta Abs,Initial Abs,Final Abs,Nominal Std EU,PO Estimated EU/mL,Status\n';
-    kineticResults.forEach((k) => {
-      const rateText = Number.isFinite(k.rate) ? k.rate.toFixed(6) : 'NaN';
-      const r2Text = Number.isFinite(k.r2) ? k.r2.toFixed(4) : 'NaN';
-      const deltaText = Number.isFinite(k.deltaAbs) ? k.deltaAbs.toFixed(4) : 'NaN';
-      const estText = k.estimatedEu !== undefined && Number.isFinite(k.estimatedEu) ? k.estimatedEu.toFixed(4) : '—';
-      const stdText = k.standardEu !== undefined ? k.standardEu.toFixed(4) : '—';
-      const status = k.rate >= 0.01 ? 'High Activity' : k.rate < 0.001 ? 'Baseline / Negative' : 'Active PO';
-
-      csv += `"${k.type}","${k.name}",${rateText},${r2Text},${deltaText},${k.initialAbs.toFixed(4)},${k.finalAbs.toFixed(4)},${stdText},${estText},${status}\n`;
+    const csv = formatKineticCsv({
+      results: kineticResults,
+      model: kineticModel,
+      runLabel,
+      threshold,
+      wavelength: wavelengths.phenoloxidase,
     });
 
-    if (kineticModel) {
-      csv += `\nPO Kinetic Standard Model,Rate = ${kineticModel.slope.toFixed(6)} * [EU] + ${kineticModel.intercept.toFixed(6)}\n`;
-      csv += `PO R-squared,${kineticModel.r2.toFixed(6)}\n`;
-    }
-
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -495,12 +480,14 @@ export default function App() {
       return;
     }
 
-    let csv = 'Sample,Coagulation EU/mL,Coagulation Abs (OD),Kinetic PO EU/mL,Kinetic Rate (dA/min),Absolute Diff (|ΔEU|),Relative Percent Difference (RPD %),Ratio (Coag/PO),Concordance Status,Analytical Remark\n';
-    comparisons.forEach((c) => {
-      csv += `"${c.name}",${c.coagEu.toFixed(4)},${c.coagAbs.toFixed(4)},${c.poEu.toFixed(4)},${c.poRate.toFixed(5)},${c.absDiff.toFixed(4)},${c.rpd.toFixed(2)},${Number.isFinite(c.ratio) ? c.ratio.toFixed(3) : 'NaN'},"${c.concordance}","${c.comment}"\n`;
+    const csv = formatComparisonCsv({
+      comparisons,
+      runLabel,
+      coagWavelength: wavelengths.coagulation,
+      poWavelength: wavelengths.phenoloxidase,
     });
 
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;

@@ -36,7 +36,12 @@ export const MethodAgreementCharts: React.FC<MethodAgreementChartsProps> = ({
   const [activeView, setActiveView] = useState<'both' | 'scatter' | 'blandAltman'>('both');
 
   const validPoints = comparisons.filter(
-    (c) => Number.isFinite(c.coagEu) && Number.isFinite(c.poEu)
+    (c) =>
+      c.isEligibleForQuantitativeStats &&
+      c.coagEu !== null &&
+      c.poEu !== null &&
+      Number.isFinite(c.coagEu) &&
+      Number.isFinite(c.poEu)
   );
 
   useEffect(() => {
@@ -72,9 +77,9 @@ export const MethodAgreementCharts: React.FC<MethodAgreementChartsProps> = ({
         const fitSlope = passingBablok ? passingBablok.slope : deming ? deming.slope : 1.0;
         const fitIntercept = passingBablok ? passingBablok.intercept : deming ? deming.intercept : 0.0;
         const fitName = passingBablok
-          ? `Passing-Bablok: ${passingBablok.equation}`
+          ? `Passing-Bablok (Exploratory): ${passingBablok.equation}`
           : deming
-          ? `Deming Fit: ${deming.equation}`
+          ? `Deming (λ=${deming.lambda.toFixed(1)}): ${deming.equation}`
           : 'Fit Line';
 
         scatterTraces.push({
@@ -88,13 +93,41 @@ export const MethodAgreementCharts: React.FC<MethodAgreementChartsProps> = ({
           },
         });
 
+        // If Passing-Bablok, add slope 95% CI bounds
+        if (passingBablok && Number.isFinite(passingBablok.slopeCiLower) && Number.isFinite(passingBablok.slopeCiUpper)) {
+          scatterTraces.push({
+            x: [0, maxVal],
+            y: [passingBablok.interceptCiLower, passingBablok.slopeCiLower * maxVal + passingBablok.interceptCiLower],
+            mode: 'lines',
+            name: 'P-B 95% CI Lower',
+            line: {
+              color: isDark ? '#6366f1' : '#818cf8',
+              width: 1,
+              dash: 'dot',
+            },
+            hoverinfo: 'none',
+          });
+          scatterTraces.push({
+            x: [0, maxVal],
+            y: [passingBablok.interceptCiUpper, passingBablok.slopeCiUpper * maxVal + passingBablok.interceptCiUpper],
+            mode: 'lines',
+            name: 'P-B 95% CI Upper',
+            line: {
+              color: isDark ? '#6366f1' : '#818cf8',
+              width: 1,
+              dash: 'dot',
+            },
+            hoverinfo: 'none',
+          });
+        }
+
         // Matched Sample Points
         scatterTraces.push({
           x: xVals,
           y: yVals,
           text: validPoints.map(
             (c) =>
-              `<b>${c.name}</b><br>Coagulation: ${c.coagEu.toFixed(3)} EU/mL<br>PO Kinetic: ${c.poEu.toFixed(3)} EU/mL<br>RPD: ${c.rpd.toFixed(1)}%`
+              `<b>${c.name}</b><br>Coagulation: ${c.coagEu !== null ? c.coagEu.toFixed(3) : '—'} EU/mL<br>PO Kinetic: ${c.poEu !== null ? c.poEu.toFixed(3) : '—'} EU/mL<br>RPD: ${c.rpd !== null ? c.rpd.toFixed(1) + '%' : '—'}`
           ),
           hoverinfo: 'text',
           mode: 'markers',
@@ -210,6 +243,34 @@ export const MethodAgreementCharts: React.FC<MethodAgreementChartsProps> = ({
           },
         });
 
+        // 95% CI for Mean Bias
+        if (Number.isFinite(blandAltman.biasCiLower) && Number.isFinite(blandAltman.biasCiUpper)) {
+          baTraces.push({
+            x: [0, xMax],
+            y: [blandAltman.biasCiUpper, blandAltman.biasCiUpper],
+            mode: 'lines',
+            name: `Bias 95% CI: [${blandAltman.biasCiLower.toFixed(3)}, ${blandAltman.biasCiUpper.toFixed(3)}]`,
+            line: {
+              color: isDark ? '#a5b4fc' : '#6366f1',
+              width: 1,
+              dash: 'dot',
+            },
+            hoverinfo: 'none',
+          });
+          baTraces.push({
+            x: [0, xMax],
+            y: [blandAltman.biasCiLower, blandAltman.biasCiLower],
+            mode: 'lines',
+            showlegend: false,
+            line: {
+              color: isDark ? '#a5b4fc' : '#6366f1',
+              width: 1,
+              dash: 'dot',
+            },
+            hoverinfo: 'none',
+          });
+        }
+
         // Upper Limit of Agreement (+1.96 SD)
         baTraces.push({
           x: [0, xMax],
@@ -235,6 +296,21 @@ export const MethodAgreementCharts: React.FC<MethodAgreementChartsProps> = ({
             dash: 'dash',
           },
         });
+
+        // Proportional bias trend line if detected
+        if (blandAltman.hasProportionalBiasWarning && Number.isFinite(blandAltman.trendSlope)) {
+          baTraces.push({
+            x: [0, xMax],
+            y: [blandAltman.trendIntercept, blandAltman.trendSlope * xMax + blandAltman.trendIntercept],
+            mode: 'lines',
+            name: `Proportional Bias Trend (p=${blandAltman.trendPValue.toFixed(3)})`,
+            line: {
+              color: isDark ? '#f59e0b' : '#d97706',
+              width: 1.5,
+              dash: 'longdashdot',
+            },
+          });
+        }
 
         // Sample Differences
         baTraces.push({

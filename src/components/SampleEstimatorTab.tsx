@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SampleRow, SampleEstimateResult, CalibrationModelFit } from '../types';
-import { summarizeReplicates, parseReplicates, mean } from '../utils/math';
+import { summarizeReplicates, parseReplicates, parseReplicatesDetailed, mean } from '../utils/math';
+import { parseSampleCsvImport } from '../utils/csv';
 import {
   Plus,
   Trash2,
@@ -22,6 +23,8 @@ interface SampleEstimatorTabProps {
   results: SampleEstimateResult[];
   threshold: number;
   setThreshold: (t: number) => void;
+  thresholdBasis?: string;
+  setThresholdBasis?: (basis: string) => void;
   onEstimate: () => void;
   onClear: () => void;
   onDownloadCsv: () => void;
@@ -36,6 +39,8 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
   results,
   threshold,
   setThreshold,
+  thresholdBasis = 'Investigational study-defined screening cut-off',
+  setThresholdBasis,
   onEstimate,
   onClear,
   onDownloadCsv,
@@ -45,13 +50,16 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
   const [pasteText, setPasteText] = useState('');
 
   const handleAddRow = () => {
+    const nextIdx = rows.length + 1;
     setRows((prev) => [
       ...prev,
       {
         id: Math.random().toString(),
-        name: `Sample ${prev.length + 1}`,
+        sampleId: `S${nextIdx}`,
+        name: `Sample ${nextIdx}`,
         abs: '',
         replicates: '',
+        dilutionFactor: '1',
       },
     ]);
   };
@@ -62,7 +70,7 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
 
   const handleRowChange = (
     id: string,
-    field: 'name' | 'abs' | 'replicates',
+    field: 'name' | 'abs' | 'replicates' | 'sampleId' | 'dilutionFactor',
     val: string
   ) => {
     setRows((prev) =>
@@ -89,22 +97,7 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
 
   const handleImportPaste = () => {
     if (!pasteText.trim()) return;
-    const newRows: SampleRow[] = [];
-    pasteText.trim().split('\n').forEach((line) => {
-      const parts = line.split(',');
-      if (parts.length >= 2) {
-        const name = parts.shift()?.trim() || '';
-        const abs = parts.length ? parts.shift()?.trim() || '' : '';
-        const reps = parts.join(',').trim();
-        newRows.push({
-          id: Math.random().toString(),
-          name,
-          abs,
-          replicates: reps,
-        });
-      }
-    });
-
+    const newRows = parseSampleCsvImport(pasteText, rows.length);
     if (newRows.length > 0) {
       setRows((prev) => [...prev, ...newRows]);
       setPasteText('');
@@ -125,18 +118,32 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
               Interpolate unknown test infusion endotoxin levels using fitted calibration curve at {coagWavelength} nm
             </p>
           </div>
-          <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-            <span className="font-medium">Pharmacopeial Threshold:</span>
-            <input
-              type="number"
-              step="0.05"
-              value={threshold}
-              onChange={(e) =>
-                setThreshold(parseFloat(e.target.value) || 0)
-              }
-              className="w-20 font-mono text-xs px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 font-bold text-slate-800 dark:text-slate-100"
-            />
-            <span className="font-semibold text-slate-500 dark:text-slate-400">EU/mL</span>
+          <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 dark:text-slate-300">
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium text-slate-700 dark:text-slate-300">Study-defined decision threshold:</span>
+              <input
+                type="number"
+                step="0.05"
+                value={threshold}
+                onChange={(e) =>
+                  setThreshold(parseFloat(e.target.value) || 0)
+                }
+                className="w-20 font-mono text-xs px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 font-bold text-slate-800 dark:text-slate-100"
+              />
+              <span className="font-semibold text-slate-500 dark:text-slate-400">EU/mL</span>
+            </div>
+            {setThresholdBasis && (
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium text-slate-700 dark:text-slate-300">Basis / Protocol:</span>
+                <input
+                  type="text"
+                  value={thresholdBasis}
+                  onChange={(e) => setThresholdBasis(e.target.value)}
+                  placeholder="e.g. Investigational screening cut-off"
+                  className="w-56 text-xs px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -146,66 +153,107 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
-                  <th className="text-left pb-2 font-medium w-1/3">
+                  <th className="text-left pb-2 font-medium w-24">
+                    Sample ID
+                  </th>
+                  <th className="text-left pb-2 font-medium">
                     Sample / Batch Description
                   </th>
-                  <th className="text-left pb-2 font-medium w-1/4">
-                    Absorbance (OD_{coagWavelength})
+                  <th className="text-left pb-2 font-medium w-28">
+                    Absorbance ({coagWavelength}nm)
                   </th>
-                  <th className="text-left pb-2 font-medium w-1/3">
+                  <th className="text-left pb-2 font-medium w-40">
                     Replicates (optional)
+                  </th>
+                  <th className="text-left pb-2 font-medium w-20">
+                    DF
                   </th>
                   <th className="w-6"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {rows.map((row) => (
-                  <tr key={row.id}>
-                    <td className="py-1.5 pr-2">
-                      <input
-                        type="text"
-                        placeholder="e.g. 5% Dextrose Infusion"
-                        value={row.name}
-                        onChange={(e) =>
-                          handleRowChange(row.id, 'name', e.target.value)
-                        }
-                        className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-850 text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800 font-medium"
-                      />
-                    </td>
-                    <td className="py-1.5 pr-2">
-                      <input
-                        type="number"
-                        step="any"
-                        placeholder="e.g. 0.082"
-                        value={row.abs}
-                        onChange={(e) =>
-                          handleRowChange(row.id, 'abs', e.target.value)
-                        }
-                        className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-850 font-mono text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800"
-                      />
-                    </td>
-                    <td className="py-1.5 pr-2">
-                      <input
-                        type="text"
-                        placeholder="e.g. 0.081, 0.083"
-                        value={row.replicates}
-                        onChange={(e) =>
-                          handleRowChange(row.id, 'replicates', e.target.value)
-                        }
-                        className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-850 font-mono text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800"
-                      />
-                    </td>
-                    <td className="py-1.5 text-center">
-                      <button
-                        onClick={() => handleRemoveRow(row.id)}
-                        className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition p-1 rounded cursor-pointer"
-                        title="Remove sample"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {rows.map((row, idx) => {
+                  const detailed = parseReplicatesDetailed(row.replicates);
+                  const hasInvalidTokens = detailed.invalidTokens.length > 0;
+
+                  return (
+                    <tr key={row.id}>
+                      <td className="py-1.5 pr-2">
+                        <input
+                          type="text"
+                          placeholder={`S${idx + 1}`}
+                          value={row.sampleId ?? `S${idx + 1}`}
+                          onChange={(e) =>
+                            handleRowChange(row.id, 'sampleId', e.target.value)
+                          }
+                          className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-850 text-xs font-mono font-bold text-indigo-700 dark:text-indigo-400 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500"
+                        />
+                      </td>
+                      <td className="py-1.5 pr-2">
+                        <input
+                          type="text"
+                          placeholder="e.g. 5% Dextrose Infusion"
+                          value={row.name}
+                          onChange={(e) =>
+                            handleRowChange(row.id, 'name', e.target.value)
+                          }
+                          className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-850 text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800 font-medium"
+                        />
+                      </td>
+                      <td className="py-1.5 pr-2">
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="e.g. 0.082"
+                          value={row.abs}
+                          onChange={(e) =>
+                            handleRowChange(row.id, 'abs', e.target.value)
+                          }
+                          className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-850 font-mono text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800"
+                        />
+                      </td>
+                      <td className="py-1.5 pr-2">
+                        <input
+                          type="text"
+                          placeholder="e.g. 0.081, 0.083"
+                          value={row.replicates}
+                          onChange={(e) =>
+                            handleRowChange(row.id, 'replicates', e.target.value)
+                          }
+                          className={`w-full border ${hasInvalidTokens ? 'border-amber-400 dark:border-amber-600' : 'border-slate-200 dark:border-slate-700'} bg-slate-50/50 dark:bg-slate-850 font-mono text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800`}
+                        />
+                        {hasInvalidTokens && (
+                          <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-0.5">
+                            Ignored: {detailed.invalidTokens.join(', ')}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-1.5 pr-2">
+                        <input
+                          type="number"
+                          step="any"
+                          min="1"
+                          placeholder="1"
+                          value={row.dilutionFactor ?? '1'}
+                          onChange={(e) =>
+                            handleRowChange(row.id, 'dilutionFactor', e.target.value)
+                          }
+                          className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-850 font-mono text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 text-center"
+                          title="Dilution factor (e.g. 10 for 1:10 dilution)"
+                        />
+                      </td>
+                      <td className="py-1.5 text-center">
+                        <button
+                          onClick={() => handleRemoveRow(row.id)}
+                          className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition p-1 rounded cursor-pointer"
+                          title="Remove sample"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -278,16 +326,34 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
 
         {/* Results table */}
         <div className="border-t border-slate-200 dark:border-slate-800">
-          <div className="flex items-center justify-between px-5 py-3 bg-slate-50/60 dark:bg-slate-800/60">
-            <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-              Calculated Endotoxin Concentrations &amp; Status Remarks
-            </h3>
+          <div className="p-4 bg-amber-50/70 dark:bg-amber-950/30 border-b border-amber-200/60 dark:border-amber-900/50 flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-200">
+            <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-[11px] leading-relaxed">
+              <strong>Persistent Research Notice:</strong> Archachatina marginata bioassay data are analyzed for investigational and research purposes only. This tool evaluates sample readings against study-configured parameters and does not establish clinical, regulatory, pharmacopeial, product-release, or patient-safety conclusions.
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 bg-slate-50/60 dark:bg-slate-800/60">
+            <div>
+              <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                Calculated Endotoxin Concentrations &amp; Analytical Evaluation
+              </h3>
+              {calibration && (
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                  Active Calibration Standards Range:{' '}
+                  <span className="font-mono font-semibold text-indigo-700 dark:text-indigo-400">
+                    {calibration.xMin.toFixed(3)} – {calibration.xMax.toFixed(3)} EU/mL
+                  </span>{' '}
+                  ({calibration.type.toUpperCase()}, R&sup2; = {calibration.r2.toFixed(4)})
+                </div>
+              )}
+            </div>
             <button
               onClick={onDownloadCsv}
               disabled={!results.length}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition disabled:opacity-40 cursor-pointer"
             >
-              <Download className="w-3.5 h-3.5" /> Download CSV
+              <Download className="w-3.5 h-3.5" /> Download Research CSV
             </button>
           </div>
 
@@ -295,18 +361,19 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
             <table className="w-full text-xs border-collapse">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wider text-slate-400 border-y border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/40">
-                  <th className="px-5 py-2.5 font-medium">Sample Name</th>
-                  <th className="px-5 py-2.5 font-medium">Mean Abs (OD_{coagWavelength})</th>
-                  <th className="px-5 py-2.5 font-medium">Estimated EU/mL</th>
-                  <th className="px-5 py-2.5 font-medium">Pharmacopeial Compliance &amp; Remarks</th>
-                  <th className="px-5 py-2.5 font-medium text-right">Status Badge</th>
+                  <th className="px-4 py-2.5 font-medium">Sample ID &amp; Name</th>
+                  <th className="px-4 py-2.5 font-medium">Mean Abs ({coagWavelength}nm Doc)</th>
+                  <th className="px-4 py-2.5 font-medium">Estimated Concentration</th>
+                  <th className="px-4 py-2.5 font-medium">Analytical Validity &amp; Range</th>
+                  <th className="px-4 py-2.5 font-medium">Study Threshold Decision</th>
+                  <th className="px-4 py-2.5 font-medium">Remarks</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {results.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="px-5 py-6 text-center text-slate-400 italic text-xs"
                     >
                       No estimated results yet. Click "Estimate Concentrations" above.
@@ -314,75 +381,83 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
                   </tr>
                 ) : (
                   results.map((r, idx) => {
-                    const isAbove = Number.isFinite(r.eu) && r.eu >= threshold;
-                    const euText = Number.isFinite(r.eu)
-                      ? r.eu.toFixed(3)
-                      : '—';
                     const repText =
                       r.n > 1
                         ? `${r.n} repl · SD ${Number.isFinite(r.sd) ? r.sd.toFixed(4) : '—'} · CV ${Number.isFinite(r.cv) ? r.cv.toFixed(1) + '%' : '—'}`
                         : 'Single reading';
 
+                    let rangeLabel = 'Interpolated (In Cal Range)';
+                    let rangeBadgeClass = 'bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800';
+
+                    if (r.analyticalStatus === 'BELOW_BLANK') {
+                      rangeLabel = 'Below Blank (< LOD)';
+                      rangeBadgeClass = 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700';
+                    } else if (r.analyticalStatus === 'OUT_OF_RANGE') {
+                      rangeLabel = 'Extrapolated (> Cal Upper)';
+                      rangeBadgeClass = 'bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700';
+                    } else if (r.analyticalStatus === 'INVALID_INPUT' || r.invalidInput) {
+                      rangeLabel = 'Invalid Reading';
+                      rangeBadgeClass = 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-800';
+                    } else if (r.analyticalStatus === 'AMBIGUOUS' || r.ambiguous) {
+                      rangeLabel = 'Ambiguous Multi-Root';
+                      rangeBadgeClass = 'bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border-purple-300 dark:border-purple-800';
+                    }
+
                     return (
                       <tr key={idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50">
-                        <td className="px-5 py-3 font-semibold text-slate-800 dark:text-slate-100">
+                        <td className="px-4 py-3 font-semibold text-slate-800 dark:text-slate-100">
+                          <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500 mr-1.5">[{r.sampleId}]</span>
                           {r.name}
                         </td>
-                        <td className="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">
+                        <td className="px-4 py-3 font-mono text-slate-700 dark:text-slate-300">
                           {r.abs.toFixed(4)}
                           <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 font-sans font-normal">
                             {repText}
                           </div>
                         </td>
-                        <td className="px-5 py-3 font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">
-                          {euText} <span className="text-[11px] font-sans font-normal text-slate-500 dark:text-slate-400">EU/mL</span>
-                        </td>
-                        <td className="px-5 py-3 text-slate-600 dark:text-slate-300 text-xs">
-                          {r.remark || (isAbove ? 'Exceeds threshold' : 'Within safety threshold')}
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          <div className="flex flex-wrap justify-end gap-1">
-                            {r.invalidInput && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300">
-                                Invalid input
-                              </span>
-                            )}
-                            {r.outOfRange && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
-                                Extrapolated
-                              </span>
-                            )}
-                            {r.negativeEstimate && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                                Clamped 0.000 EU
-                              </span>
-                            )}
-                            {r.ambiguous && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300">
-                                Ambiguous roots
-                              </span>
-                            )}
-                            {r.noSolution && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300">
-                                No range solution
-                              </span>
-                            )}
-                            {!r.invalidInput &&
-                              !r.ambiguous &&
-                              !r.noSolution && (
-                                <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                                    isAbove
-                                      ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
-                                      : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                                  }`}
-                                >
-                                  {isAbove
-                                    ? 'FLAGGED (> Limit)'
-                                    : 'PASS (≤ Limit)'}
-                                </span>
+                        <td className="px-4 py-3 font-mono">
+                          {r.reportedEu !== null && Number.isFinite(r.reportedEu) ? (
+                            <div>
+                              <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                                {r.reportedEu.toFixed(3)}
+                              </span>{' '}
+                              <span className="text-[11px] font-sans font-normal text-slate-500 dark:text-slate-400">EU/mL</span>
+                              {r.dilutionFactor > 1 && (
+                                <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-sans mt-0.5">
+                                  DF {r.dilutionFactor}× (raw: {r.originalConcentration?.toFixed(3)} EU/mL)
+                                </div>
                               )}
-                          </div>
+                            </div>
+                          ) : (
+                            <div className="font-bold text-amber-700 dark:text-amber-400 text-xs font-mono">
+                              {r.reportableText}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border ${rangeBadgeClass}`}>
+                            {rangeLabel}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              r.compliance === 'PASS'
+                                ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                                : r.compliance === 'FLAGGED'
+                                ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                                : 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                            }`}
+                          >
+                            {r.compliance === 'PASS'
+                              ? `Below Study Threshold (≤ ${threshold.toFixed(3)} EU/mL)`
+                              : r.compliance === 'FLAGGED'
+                              ? `Above Study Threshold (> ${threshold.toFixed(3)} EU/mL)`
+                              : 'Inconclusive / Review'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-300 text-xs">
+                          {r.remark}
                         </td>
                       </tr>
                     );
@@ -394,10 +469,10 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
         </div>
 
         {/* Status Guide Footer Card */}
-        <div className="p-4 bg-slate-50/80 border-t border-slate-200 flex items-start gap-2.5 text-xs text-slate-600">
-          <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+        <div className="p-4 bg-slate-50/80 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-start gap-2.5 text-xs text-slate-600 dark:text-slate-400">
+          <Info className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
           <div className="text-[11px] leading-relaxed">
-            <strong>Pharmacopeia Evaluation Standard:</strong> Intravenous infusion solutions (e.g. 0.9% NaCl, 5% Dextrose, Ringer's Lactate) have a maximum permissible endotoxin limit of <strong>0.500 EU/mL</strong> (USP/EP pyrogen limit). Samples flagged above this threshold pose potential endotoxemic pyrogen risk.
+            <strong>Study Threshold Protocol Notice:</strong> Endotoxin decision thresholds are study-defined parameters and depend on the specific formulation, route, and research protocol. This investigational analysis software evaluates sample readings against the configured study decision threshold. It does not establish clinical, regulatory, pharmacopeial, product-release, or patient-safety conclusions.
           </div>
         </div>
       </div>
