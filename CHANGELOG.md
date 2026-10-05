@@ -11,8 +11,7 @@ All notable analytical, statistical, UX, and architectural changes in this repos
 - **Ordinary Least Squares (OLS)**: Added collinearity and singular matrix detection ($SS_{xx} \le 10^{-12}$).
 - **Quadratic Regression Matrix Inversion**: Added condition number check ($> 10^{12}$) and determinant check ($|\det| \le 10^{-14}$) on the normal equations Vandermonde matrix. Explicitly prevents ill-conditioned polynomial inversion and falls back to linear OLS with user-visible notice.
 - **Root Multiplicity in Quadratic Inversion**: Handled single-root, duplicate roots, and multiple distinct real roots within the calibration range ($[x_{min}, x_{max}]$). If two valid roots fall in range, sample is flagged as `AMBIGUOUS_ROOTS` rather than picking an arbitrary root.
-- **Passing–Bablok Nonparametric Regression**: Corrected median slope estimator to compute median of pairwise slopes for all pairs where $x_j > x_i$ (or $x_j \ne x_i$). Added Kendall's $\tau$ score and bootstrap percentile confidence intervals.
-- **Deming Orthogonal Regression**: Corrected error variance ratio ($\delta = \lambda = \sigma^2_\epsilon / \sigma^2_\eta$) handling and added exact jackknife standard error calculation.
+- **Deming Orthogonal Regression**: Explicit error-variance ratio $\lambda = \text{variance of measurement error in } X / \text{variance of measurement error in } Y$ (where $X$ is Coagulation and $Y$ is Phenoloxidase) and exact jackknife standard error calculation.
 - **Bland–Altman Agreement**: Added standard error of mean bias ($\sqrt{s_d^2 / n}$) and 95% confidence intervals for both Upper and Lower Limits of Agreement (LoA). Corrected Relative Percent Difference formula to $(Y - X) / ((X + Y) / 2) \times 100\%$.
 
 ### 2. Analytical Validity vs. Study Decision Separation

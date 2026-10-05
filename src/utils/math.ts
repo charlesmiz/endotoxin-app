@@ -11,7 +11,6 @@ import {
   AssayComparisonItem,
   BlandAltmanResult,
   BlandAltmanPoint,
-  PassingBablokResult,
   DemingResult,
   AgreementAnalysisSummary,
   ModelDiagnosticComparison,
@@ -1515,243 +1514,8 @@ export function computeBlandAltman(
 }
 
 /**
- * Helper to retrieve the slope at 1-based rank r in the Passing-Bablok rotated angular sequence.
- * In Passing & Bablok (1983), pairwise slopes are rotated such that the boundary is at angle -45° (slope -1).
- * Slopes S >= -1 are ordered first, followed by slopes S < -1.
- */
-function getPassingBablokRotatedSlope(
-  sortedSlopes: number[],
-  r: number,
-  K: number
-): number {
-  const N = sortedSlopes.length;
-  let shiftedRank = r + K;
-  if (shiftedRank > N) {
-    shiftedRank -= N;
-  }
-  return sortedSlopes[shiftedRank - 1];
-}
-
-/**
- * Computes Classical Passing-Bablok non-parametric regression (Passing & Bablok 1983).
- * Explicitly implements:
- * 1. Correct shifted median handling for even and odd N.
- * 2. Proper treatment of tied x (dx = 0, vertical), tied y (dy = 0, horizontal), and identical points.
- * 3. Exact exclusion of S = -1 (perpendicular direction).
- * 4. Proper angular rotation for negative slopes (S < -1 count K).
- * 5. Kendall-like rank indexing for 95% Confidence Intervals.
- * 6. Linearity Cusum test.
- */
-export function computePassingBablok(
-  comparisons: AssayComparisonItem[]
-): PassingBablokResult | null {
-  const valid = comparisons.filter(
-    (c) =>
-      c.isEligibleForQuantitativeStats &&
-      c.coagEu !== null &&
-      c.poEu !== null &&
-      Number.isFinite(c.coagEu) &&
-      Number.isFinite(c.poEu)
-  );
-
-  const n = valid.length;
-  if (n < 3) return null;
-
-  const totalPairs = (n * (n - 1)) / 2;
-  const slopes: number[] = [];
-  let tiedXPairs = 0;
-  let tiedYPairs = 0;
-  let sMinusOnePairs = 0;
-  let kCount = 0; // count of slopes strictly < -1
-
-  for (let i = 0; i < n - 1; i++) {
-    for (let j = i + 1; j < n; j++) {
-      const dx = valid[j].coagEu! - valid[i].coagEu!;
-      const dy = valid[j].poEu! - valid[i].poEu!;
-
-      // Disregard identical points
-      if (Math.abs(dx) < 1e-12 && Math.abs(dy) < 1e-12) {
-        continue;
-      }
-
-      if (Math.abs(dx) < 1e-12) {
-        // Vertical line (angle 90° or slope +Infinity)
-        tiedXPairs++;
-        slopes.push(Infinity);
-        continue;
-      }
-
-      if (Math.abs(dy) < 1e-12) {
-        tiedYPairs++;
-        slopes.push(0);
-        continue;
-      }
-
-      const s = dy / dx;
-
-      // Disregard slopes equal to -1 (perpendicular to identity)
-      if (Math.abs(s - -1) < 1e-9) {
-        sMinusOnePairs++;
-        continue;
-      }
-
-      slopes.push(s);
-      if (s < -1) {
-        kCount++;
-      }
-    }
-  }
-
-  const validPairs = slopes.length;
-  if (validPairs === 0) return null;
-
-  // Sort slopes in standard ascending numerical order: S_(1) <= S_(2) <= ... <= S_(N)
-  slopes.sort((a, b) => a - b);
-  const N = validPairs;
-
-  // Estimate median slope b via rotated angular median
-  let slope: number;
-  if (N % 2 === 1) {
-    const m = (N + 1) / 2;
-    slope = getPassingBablokRotatedSlope(slopes, m, kCount);
-  } else {
-    const m1 = N / 2;
-    const m2 = N / 2 + 1;
-    const s1 = getPassingBablokRotatedSlope(slopes, m1, kCount);
-    const s2 = getPassingBablokRotatedSlope(slopes, m2, kCount);
-    slope = (s1 + s2) / 2;
-  }
-
-  // If slope is infinite or non-finite, cannot compute valid linear relationship
-  if (!Number.isFinite(slope)) return null;
-
-  // 95% Confidence Interval for slope b (Kendall-type score variance)
-  // sigma = sqrt( n*(n-1)*(2n+5) / 18 )
-  const sigma = Math.sqrt((n * (n - 1) * (2 * n + 5)) / 18);
-  const cAlpha = 1.95996398454 * sigma;
-
-  let m1 = Math.round((N - cAlpha) / 2);
-  if (m1 < 1) m1 = 1;
-  let m2 = N + 1 - m1;
-  if (m2 > N) m2 = N;
-
-  const sCi1 = getPassingBablokRotatedSlope(slopes, m1, kCount);
-  const sCi2 = getPassingBablokRotatedSlope(slopes, m2, kCount);
-  const slopeCiLower = Math.min(sCi1, sCi2);
-  const slopeCiUpper = Math.max(sCi1, sCi2);
-
-  // Compute Intercept a = median(y_i - b * x_i)
-  const computeMedianIntercept = (bVal: number): number => {
-    const residuals = valid.map((p) => p.poEu! - bVal * p.coagEu!);
-    residuals.sort((a, b) => a - b);
-    const len = residuals.length;
-    if (len % 2 === 1) {
-      return residuals[Math.floor(len / 2)];
-    }
-    return (residuals[len / 2 - 1] + residuals[len / 2]) / 2;
-  };
-
-  const intercept = computeMedianIntercept(slope);
-  const intFromUpperB = computeMedianIntercept(slopeCiUpper);
-  const intFromLowerB = computeMedianIntercept(slopeCiLower);
-  const interceptCiLower = Math.min(intFromUpperB, intFromLowerB);
-  const interceptCiUpper = Math.max(intFromUpperB, intFromLowerB);
-
-  const hasConstantBias = !(interceptCiLower <= 0 && interceptCiUpper >= 0);
-  const hasProportionalBias = !(slopeCiLower <= 1.0 && slopeCiUpper >= 1.0);
-
-  // Linearity Cusum Test (Passing & Bablok 1983)
-  // Project points onto the fitted line: d_i = (x_i + b * y_i) / sqrt(1 + b^2)
-  const normFactor = Math.sqrt(1 + slope * slope);
-  const projected = valid.map((p) => {
-    const x = p.coagEu!;
-    const y = p.poEu!;
-    const d = (x + slope * y) / normFactor;
-    const res = y - (intercept + slope * x);
-    let sign = 0;
-    if (res > 1e-9) sign = 1;
-    else if (res < -1e-9) sign = -1;
-    return { d, sign };
-  });
-
-  projected.sort((a, b) => a.d - b.d);
-
-  let cusum = 0;
-  let maxCusum = 0;
-  for (const item of projected) {
-    cusum += item.sign;
-    if (Math.abs(cusum) > maxCusum) {
-      maxCusum = Math.abs(cusum);
-    }
-  }
-
-  const cusumStat = maxCusum;
-  // Critical value for alpha = 0.05 from Kolmogorov-Smirnov cumulative sum threshold: h = floor(1.358 * sqrt(n))
-  const cusumCritical = Math.max(2, Math.floor(1.358 * Math.sqrt(n)));
-  const isLinear = cusumStat <= cusumCritical;
-
-  // Pearson correlation R & R^2 for descriptive reference
-  const xMean = mean(valid.map((p) => p.coagEu!));
-  const yMean = mean(valid.map((p) => p.poEu!));
-  let sxx = 0;
-  let syy = 0;
-  let sxy = 0;
-
-  valid.forEach((p) => {
-    const dx = p.coagEu! - xMean;
-    const dy = p.poEu! - yMean;
-    sxx += dx * dx;
-    syy += dy * dy;
-    sxy += dx * dy;
-  });
-
-  const denom = Math.sqrt(sxx * syy);
-  const pearsonR = denom > 0 ? sxy / denom : 0;
-  const r2 = pearsonR * pearsonR;
-
-  const sign = intercept >= 0 ? '+' : '-';
-  const equation = `y = ${slope.toFixed(3)}x ${sign} ${Math.abs(intercept).toFixed(3)}`;
-
-  // Strict language hygiene: CI including 1 and 0 does NOT prove equivalence
-  let interpretationNote = '';
-  if (!hasProportionalBias && !hasConstantBias) {
-    interpretationNote = `Slope 95% CI includes 1.00 [${slopeCiLower.toFixed(2)}–${slopeCiUpper.toFixed(2)}] and Intercept 95% CI includes 0.00 [${interceptCiLower.toFixed(3)}–${interceptCiUpper.toFixed(3)}]. The null hypothesis of no constant or proportional difference is not rejected at α = 0.05. Note: Failure to reject does not confirm method equivalence.`;
-  } else if (hasProportionalBias && hasConstantBias) {
-    interpretationNote = `Statistically significant proportional difference (Slope 95% CI: ${slopeCiLower.toFixed(2)}–${slopeCiUpper.toFixed(2)}) and constant offset (Intercept 95% CI: ${interceptCiLower.toFixed(3)}–${interceptCiUpper.toFixed(3)}) detected at α = 0.05.`;
-  } else if (hasProportionalBias) {
-    interpretationNote = `Statistically significant proportional difference detected (Slope 95% CI: ${slopeCiLower.toFixed(2)}–${slopeCiUpper.toFixed(2)}, excludes 1.00) at α = 0.05.`;
-  } else {
-    interpretationNote = `Statistically significant constant offset detected (Intercept 95% CI: ${interceptCiLower.toFixed(3)}–${interceptCiUpper.toFixed(3)}, excludes 0.00) at α = 0.05.`;
-  }
-
-  return {
-    n,
-    totalPairs,
-    validPairs,
-    tiedXPairs,
-    tiedYPairs,
-    sMinusOnePairs,
-    kCount,
-    slope,
-    intercept,
-    slopeCiLower,
-    slopeCiUpper,
-    interceptCiLower,
-    interceptCiUpper,
-    hasConstantBias,
-    hasProportionalBias,
-    cusumStat,
-    cusumCritical,
-    isLinear,
-    pearsonR,
-    r2,
-    equation,
-    interpretationNote,
-  };
-}
-
-/**
- * Computes Deming regression with explicit error variance ratio lambda = Var(e_x) / Var(e_y).
+ * Computes Deming regression with error-variance ratio lambda = Var(error in X) / Var(error in Y),
+ * where X = Coagulation assay and Y = Phenoloxidase assay.
  * Computes Jackknife standard errors and 95% confidence intervals (Linnet 1993, 1998; CLSI EP09-A3).
  */
 export function computeDemingRegression(
@@ -1849,7 +1613,7 @@ export function computeDemingRegression(
 
   const sign = overall.intercept >= 0 ? '+' : '-';
   const equation = `y = ${overall.slope.toFixed(3)}x ${sign} ${Math.abs(overall.intercept).toFixed(3)}`;
-  const assumptionStatement = `Assumes known error variance ratio λ = Var(ε_x)/Var(ε_y) = ${lambda.toFixed(2)} (${
+  const assumptionStatement = `Assumes known error-variance ratio λ = variance of measurement error in X / variance of measurement error in Y = ${lambda.toFixed(2)} (where X = Coagulation, Y = Phenoloxidase; ${
     lambda === 1.0
       ? 'equal error variances between assays'
       : 'study-specified error variance weighting'
@@ -1892,7 +1656,6 @@ export function computeAgreementSummary(
   const ba = computeBlandAltman(comparisons, allowableMargin, lowConcCutoff);
   if (!ba) return null;
 
-  const pb = computePassingBablok(comparisons);
   const deming = computeDemingRegression(comparisons, demingLambda);
 
   const eligible = comparisons.filter((c) => c.isEligibleForQuantitativeStats);
@@ -1926,17 +1689,12 @@ export function computeAgreementSummary(
     }
   }
 
-  if (pb) {
-    statement += ` Passing-Bablok non-parametric regression: Slope = ${pb.slope.toFixed(2)} [95% CI: ${pb.slopeCiLower.toFixed(2)}–${pb.slopeCiUpper.toFixed(2)}], Intercept = ${pb.intercept.toFixed(3)} [95% CI: ${pb.interceptCiLower.toFixed(3)}–${pb.interceptCiUpper.toFixed(3)}]. ${pb.interpretationNote} Linearity cusum test: ${pb.isLinear ? 'no significant non-linearity detected (p ≥ 0.05)' : 'significant deviation from linearity detected (p < 0.05)'}.`;
-  }
-
   if (lowConcCount > 0) {
     statement += ` Note: ${lowConcCount} sample(s) have concentrations near baseline (< ${lowConcCutoff.toFixed(3)} EU/mL), where RPD is mathematically amplified by baseline division; absolute differences should be consulted alongside percentage metrics.`;
   }
 
   return {
     blandAltman: ba,
-    passingBablok: pb || undefined,
     deming: deming || undefined,
     allowableMargin,
     exploratoryRpdTier1,

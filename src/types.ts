@@ -287,31 +287,6 @@ export interface BlandAltmanResult {
   assumptionsNotice: string;
 }
 
-export interface PassingBablokResult {
-  n: number;
-  totalPairs: number;
-  validPairs: number;
-  tiedXPairs: number;
-  tiedYPairs: number;
-  sMinusOnePairs: number;
-  kCount: number; // pairwise slopes < -1
-  slope: number;
-  intercept: number;
-  slopeCiLower: number;
-  slopeCiUpper: number;
-  interceptCiLower: number;
-  interceptCiUpper: number;
-  hasConstantBias: boolean; // 0 not in CI of intercept
-  hasProportionalBias: boolean; // 1 not in CI of slope
-  cusumStat: number;
-  cusumCritical: number;
-  isLinear: boolean; // cusumStat <= cusumCritical
-  pearsonR: number;
-  r2: number;
-  equation: string;
-  interpretationNote: string;
-}
-
 export interface DemingResult {
   n: number;
   lambda: number;
@@ -332,7 +307,6 @@ export interface DemingResult {
 
 export interface AgreementAnalysisSummary {
   blandAltman: BlandAltmanResult;
-  passingBablok?: PassingBablokResult;
   deming?: DemingResult;
   allowableMargin?: number;
   exploratoryRpdTier1: number;

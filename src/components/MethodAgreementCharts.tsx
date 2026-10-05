@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   AssayComparisonItem,
   BlandAltmanResult,
-  PassingBablokResult,
   DemingResult,
 } from '../types';
 import {
@@ -17,7 +16,6 @@ import {
 interface MethodAgreementChartsProps {
   comparisons: AssayComparisonItem[];
   blandAltman: BlandAltmanResult | null;
-  passingBablok?: PassingBablokResult | null;
   deming?: DemingResult | null;
   height?: number;
   isPrintView?: boolean;
@@ -26,7 +24,6 @@ interface MethodAgreementChartsProps {
 export const MethodAgreementCharts: React.FC<MethodAgreementChartsProps> = ({
   comparisons,
   blandAltman,
-  passingBablok,
   deming,
   height = 300,
   isPrintView = false,
@@ -73,51 +70,17 @@ export const MethodAgreementCharts: React.FC<MethodAgreementChartsProps> = ({
           hoverinfo: 'none',
         });
 
-        // Fitted regression line (Passing-Bablok or Deming)
-        const fitSlope = passingBablok ? passingBablok.slope : deming ? deming.slope : 1.0;
-        const fitIntercept = passingBablok ? passingBablok.intercept : deming ? deming.intercept : 0.0;
-        const fitName = passingBablok
-          ? `Passing-Bablok (Exploratory): ${passingBablok.equation}`
-          : deming
-          ? `Deming (λ=${deming.lambda.toFixed(1)}): ${deming.equation}`
-          : 'Fit Line';
-
-        scatterTraces.push({
-          x: [0, maxVal],
-          y: [fitIntercept, fitSlope * maxVal + fitIntercept],
-          mode: 'lines',
-          name: fitName,
-          line: {
-            color: isDark ? '#818cf8' : '#4f46e5',
-            width: 2,
-          },
-        });
-
-        // If Passing-Bablok, add slope 95% CI bounds
-        if (passingBablok && Number.isFinite(passingBablok.slopeCiLower) && Number.isFinite(passingBablok.slopeCiUpper)) {
+        // Fitted regression line (Deming)
+        if (deming) {
           scatterTraces.push({
             x: [0, maxVal],
-            y: [passingBablok.interceptCiLower, passingBablok.slopeCiLower * maxVal + passingBablok.interceptCiLower],
+            y: [deming.intercept, deming.slope * maxVal + deming.intercept],
             mode: 'lines',
-            name: 'P-B 95% CI Lower',
+            name: `Deming (λ=${deming.lambda.toFixed(1)}): ${deming.equation}`,
             line: {
-              color: isDark ? '#6366f1' : '#818cf8',
-              width: 1,
-              dash: 'dot',
+              color: isDark ? '#818cf8' : '#4f46e5',
+              width: 2,
             },
-            hoverinfo: 'none',
-          });
-          scatterTraces.push({
-            x: [0, maxVal],
-            y: [passingBablok.interceptCiUpper, passingBablok.slopeCiUpper * maxVal + passingBablok.interceptCiUpper],
-            mode: 'lines',
-            name: 'P-B 95% CI Upper',
-            line: {
-              color: isDark ? '#6366f1' : '#818cf8',
-              width: 1,
-              dash: 'dot',
-            },
-            hoverinfo: 'none',
           });
         }
 
@@ -427,7 +390,7 @@ export const MethodAgreementCharts: React.FC<MethodAgreementChartsProps> = ({
       window.removeEventListener('app-theme-changed', renderAllCharts);
       resizeObserver.disconnect();
     };
-  }, [comparisons, blandAltman, passingBablok, deming, activeView, isPrintView]);
+  }, [comparisons, blandAltman, deming, activeView, isPrintView]);
 
   if (validPoints.length < 2) {
     return (
@@ -499,9 +462,9 @@ export const MethodAgreementCharts: React.FC<MethodAgreementChartsProps> = ({
             />
             <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-between px-1">
               <span>Points on dotted line show exact 1:1 agreement.</span>
-              {passingBablok && (
+              {deming && (
                 <span className="font-mono text-indigo-600 dark:text-indigo-400">
-                  Passing-Bablok: {passingBablok.equation}
+                  Deming: {deming.equation}
                 </span>
               )}
             </div>

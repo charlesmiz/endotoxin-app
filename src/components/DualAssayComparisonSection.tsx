@@ -50,7 +50,6 @@ export const DualAssayComparisonSection: React.FC<DualAssayComparisonSectionProp
   }, [comparisons, allowableMargin, tier1Rpd, tier2Rpd, lowConcCutoff, demingLambda]);
 
   const blandAltman = agreementSummary?.blandAltman ?? null;
-  const passingBablok = agreementSummary?.passingBablok ?? null;
   const deming = agreementSummary?.deming ?? null;
 
   if (comparisons.length === 0) {
@@ -173,7 +172,7 @@ export const DualAssayComparisonSection: React.FC<DualAssayComparisonSectionProp
                 className="w-full px-2.5 py-1 text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded font-mono"
               />
               <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                λ = Var(ε_x)/Var(ε_y). λ = 1.00 assumes equal error variance between assays.
+                λ = variance of measurement error in X / variance of measurement error in Y, where X = Coagulation assay and Y = Phenoloxidase assay (default λ = 1.00 for equal error variance).
               </p>
             </div>
 
@@ -338,9 +337,9 @@ export const DualAssayComparisonSection: React.FC<DualAssayComparisonSectionProp
         </div>
       )}
 
-      {/* Advanced Statistical Agreement Cards: Bland-Altman, Passing-Bablok, Deming */}
+      {/* Advanced Statistical Agreement Cards: Bland-Altman, Deming */}
       {blandAltman && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* Card 1: Bland-Altman Agreement */}
           <div className="p-3.5 bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 rounded-lg space-y-2">
             <div className="flex items-center justify-between">
@@ -407,73 +406,12 @@ export const DualAssayComparisonSection: React.FC<DualAssayComparisonSectionProp
             </div>
           </div>
 
-          {/* Card 2: Passing-Bablok Exploratory Regression */}
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-lg space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="text-[11px] font-bold text-slate-900 dark:text-slate-200 flex items-center gap-1.5 uppercase tracking-wider">
-                <Activity className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                Passing-Bablok Regression
-              </div>
-              <span className="text-[9px] font-mono px-1.5 py-0.2 bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded">
-                Exploratory
-              </span>
-            </div>
-
-            {passingBablok ? (
-              <div className="text-xs text-slate-700 dark:text-slate-300 space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">Equation:</span>
-                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
-                    {passingBablok.equation}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">Slope (95% CI):</span>
-                  <span className="font-mono text-slate-800 dark:text-slate-200">
-                    {passingBablok.slope.toFixed(3)} [{passingBablok.slopeCiLower.toFixed(2)}–{passingBablok.slopeCiUpper.toFixed(2)}]
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">Intercept (95% CI):</span>
-                  <span className="font-mono text-slate-800 dark:text-slate-200">
-                    {passingBablok.intercept.toFixed(3)} [{passingBablok.interceptCiLower.toFixed(3)}–{passingBablok.interceptCiUpper.toFixed(3)}]
-                  </span>
-                </div>
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-slate-500 dark:text-slate-400">Linearity Cusum Test:</span>
-                  <span
-                    className={`font-semibold ${
-                      passingBablok.isLinear
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-amber-600 dark:text-amber-400'
-                    }`}
-                  >
-                    {passingBablok.isLinear ? `Linear (stat: ${passingBablok.cusumStat} ≤ crit: ${passingBablok.cusumCritical})` : `Non-linear (stat: ${passingBablok.cusumStat} > crit: ${passingBablok.cusumCritical})`}
-                  </span>
-                </div>
-                <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400 pt-1">
-                  <span>Pairwise slopes:</span>
-                  <span className="font-mono">
-                    N = {passingBablok.validPairs} (Tied: x={passingBablok.tiedXPairs}, y={passingBablok.tiedYPairs}, S=-1 excluded: {passingBablok.sMinusOnePairs})
-                  </span>
-                </div>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 italic pt-1 border-t border-slate-200 dark:border-slate-800">
-                  {passingBablok.interpretationNote}
-                </p>
-              </div>
-            ) : (
-              <p className="text-xs text-slate-400">
-                Insufficient quantitative pairs (n ≥ 3 required).
-              </p>
-            )}
-          </div>
-
-          {/* Card 3: Deming Regression */}
+          {/* Card 2: Deming Regression */}
           <div className="p-3.5 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-lg space-y-2">
             <div className="flex items-center justify-between">
               <div className="text-[11px] font-bold text-slate-900 dark:text-slate-200 flex items-center gap-1.5 uppercase tracking-wider">
                 <Scale className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                Deming Regression (OLS)
+                Deming Regression
               </div>
               <span className="text-[9px] font-mono px-1.5 py-0.2 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 text-slate-600">
                 λ = {demingLambda.toFixed(2)}
@@ -536,7 +474,6 @@ export const DualAssayComparisonSection: React.FC<DualAssayComparisonSectionProp
       <MethodAgreementCharts
         comparisons={comparisons}
         blandAltman={blandAltman}
-        passingBablok={passingBablok}
         deming={deming}
         isPrintView={isPrintView}
         height={260}
@@ -686,10 +623,7 @@ export const DualAssayComparisonSection: React.FC<DualAssayComparisonSectionProp
             <strong>Bland-Altman Agreement:</strong> Plots difference (EU<sub>coag</sub> - EU<sub>po</sub>) against mean concentration to evaluate mean systematic bias (d̄) and 95% Limits of Agreement (d̄ ± 1.96 · s<sub>d</sub>) alongside 95% confidence intervals. <em>Note: The empirical percentage of points within LoA (~95% Gaussian expectation) is descriptive only and does not establish acceptable analytical agreement without comparing against an a priori allowable difference margin.</em>
           </li>
           <li>
-            <strong>Passing-Bablok Regression:</strong> Non-parametric procedure based on shifted pairwise medians. Evaluates whether the slope 95% CI includes 1.0 (no proportional bias) and intercept 95% CI includes 0.0 (no constant systematic offset). A CI containing 1.0 and 0.0 represents failure to reject the null hypothesis of no difference, not positive confirmation of equivalence.
-          </li>
-          <li>
-            <strong>Deming Regression:</strong> Orthogonal model accounting for measurement error in both assays simultaneously. Explicitly assumes an error variance ratio λ = Var(ε<sub>coag</sub>)/Var(ε<sub>po</sub>), defaulting to λ = 1.00 (equal error variance).
+            <strong>Deming Regression:</strong> An errors-in-variables method that accounts for measurement error in both methods. Explicitly assumes an error variance ratio λ = variance of measurement error in X / variance of measurement error in Y = Var(ε<sub>coag</sub>)/Var(ε<sub>po</sub>), where X is Coagulation and Y is Phenoloxidase (default λ = 1.00 for equal error variance).
           </li>
           <li>
             <strong>Relative Percent Difference (RPD) &amp; Absolute Difference:</strong> RPD = (|EU<sub>coag</sub> - EU<sub>po</sub>| / ((EU<sub>coag</sub> + EU<sub>po</sub>) / 2)) × 100%. Because RPD becomes unstable as concentrations approach zero, absolute difference |ΔEU| must be evaluated alongside percentage metrics for low-concentration samples.

@@ -3,7 +3,6 @@ import {
   linreg,
   quadreg,
   invertQuadratic,
-  computePassingBablok,
   computeDemingRegression,
   computeBlandAltman,
   fDistributionPValue,
@@ -120,51 +119,8 @@ describe('Implementation Quality Gates: Golden Reference Fixtures', () => {
     });
   });
 
-  // 3. Golden Reference for Passing–Bablok Nonparametric Regression
-  describe('3. Golden Reference: Passing–Bablok Regression', () => {
-    it('computes exact identity regression for identical assay measurements', () => {
-      const items: AssayComparisonItem[] = [
-        mockItem({ sampleId: 'S1', coagEu: 0.10, poEu: 0.10, coagAbs: 0.01, poRate: 0.005 }),
-        mockItem({ sampleId: 'S2', coagEu: 0.25, poEu: 0.25, coagAbs: 0.02, poRate: 0.010 }),
-        mockItem({ sampleId: 'S3', coagEu: 0.50, poEu: 0.50, coagAbs: 0.05, poRate: 0.020 }),
-        mockItem({ sampleId: 'S4', coagEu: 1.00, poEu: 1.00, coagAbs: 0.10, poRate: 0.040 }),
-        mockItem({ sampleId: 'S5', coagEu: 2.00, poEu: 2.00, coagAbs: 0.20, poRate: 0.080 }),
-        mockItem({ sampleId: 'S6', coagEu: 4.00, poEu: 4.00, coagAbs: 0.40, poRate: 0.160 }),
-      ];
-
-      const pb = computePassingBablok(items);
-      expect(pb).not.toBeNull();
-      expect(pb?.slope).toBeCloseTo(1.0, 5);
-      expect(pb?.intercept).toBeCloseTo(0.0, 5);
-      expect(pb?.slopeCiLower).toBeLessThanOrEqual(1.0);
-      expect(pb?.slopeCiUpper).toBeGreaterThanOrEqual(1.0);
-      expect(pb?.interceptCiLower).toBeLessThanOrEqual(0.0);
-      expect(pb?.interceptCiUpper).toBeGreaterThanOrEqual(0.0);
-      expect(pb?.isLinear).toBe(true);
-    });
-
-    it('CLSI EP09 style test: handles systematic proportional and constant shift', () => {
-      // Y = 1.10 * X + 0.05
-      const xVals = [0.2, 0.4, 0.8, 1.2, 1.8, 2.5, 3.2, 4.0];
-      const items: AssayComparisonItem[] = xVals.map((x, i) => {
-        const y = 1.10 * x + 0.05;
-        return mockItem({
-          sampleId: `S${i + 1}`,
-          coagEu: x,
-          poEu: y,
-        });
-      });
-
-      const pb = computePassingBablok(items);
-      expect(pb).not.toBeNull();
-      expect(pb?.slope).toBeCloseTo(1.10, 4);
-      expect(pb?.intercept).toBeCloseTo(0.05, 4);
-      expect(pb?.isLinear).toBe(true);
-    });
-  });
-
-  // 4. Golden Reference for Deming Regression
-  describe('4. Golden Reference: Deming Orthogonal Regression', () => {
+  // 3. Golden Reference for Deming Regression
+  describe('3. Golden Reference: Deming Orthogonal Regression', () => {
     it('produces exact slope = 1.0 and intercept = 0.0 for identical data with lambda = 1.0', () => {
       const items: AssayComparisonItem[] = [
         0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8,

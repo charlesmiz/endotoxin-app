@@ -18,7 +18,6 @@ import {
   computeKineticRates,
   computeAssayComparison,
   computeBlandAltman,
-  computePassingBablok,
   computeDemingRegression,
   computeAgreementSummary,
 } from './math';
@@ -437,7 +436,7 @@ describe('C. Cross-Assay Pairing & Agreement Analysis', () => {
     expect(s2?.rpd).toBeNull();
   });
 
-  it('Bland-Altman and Passing-Bablok run only on quantitatively eligible samples', () => {
+  it('Bland-Altman runs only on quantitatively eligible samples', () => {
     const comparisons = computeAssayComparison(coagResults, poComputed, 20.0, 'Run 1');
     const ba = computeBlandAltman(comparisons);
     expect(ba).toBeDefined();
@@ -473,138 +472,7 @@ const makeComparisonItems = (pairs: [number, number][]): AssayComparisonItem[] =
   }));
 };
 
-describe('G. Passing–Bablok Classical Algorithm Benchmarks & Fixtures', () => {
-
-  it('Fixture 1: Perfect Agreement (y = x) across Even N (n = 4)', () => {
-    const items = makeComparisonItems([
-      [0.1, 0.1],
-      [0.2, 0.2],
-      [0.4, 0.4],
-      [0.8, 0.8],
-    ]);
-    const pb = computePassingBablok(items);
-    expect(pb).not.toBeNull();
-    expect(pb?.slope).toBeCloseTo(1.0, 5);
-    expect(pb?.intercept).toBeCloseTo(0.0, 5);
-    expect(pb?.hasProportionalBias).toBe(false);
-    expect(pb?.hasConstantBias).toBe(false);
-    expect(pb?.isLinear).toBe(true);
-  });
-
-  it('Fixture 2: Constant Offset (y = x + 0.15) across Odd N (n = 5)', () => {
-    const items = makeComparisonItems([
-      [0.1, 0.25],
-      [0.2, 0.35],
-      [0.3, 0.45],
-      [0.5, 0.65],
-      [0.8, 0.95],
-    ]);
-    const pb = computePassingBablok(items);
-    expect(pb).not.toBeNull();
-    expect(pb?.slope).toBeCloseTo(1.0, 5);
-    expect(pb?.intercept).toBeCloseTo(0.15, 5);
-    expect(pb?.hasProportionalBias).toBe(false);
-    expect(pb?.hasConstantBias).toBe(true);
-  });
-
-  it('Fixture 3: Proportional Bias (y = 1.4x) across Even N (n = 6)', () => {
-    const items = makeComparisonItems([
-      [0.1, 0.14],
-      [0.2, 0.28],
-      [0.3, 0.42],
-      [0.4, 0.56],
-      [0.5, 0.70],
-      [0.6, 0.84],
-    ]);
-    const pb = computePassingBablok(items);
-    expect(pb).not.toBeNull();
-    expect(pb?.slope).toBeCloseTo(1.4, 4);
-    expect(pb?.intercept).toBeCloseTo(0.0, 4);
-    expect(pb?.hasProportionalBias).toBe(true);
-    expect(pb?.hasConstantBias).toBe(false);
-  });
-
-  it('Fixture 4: Handled tied x values (vertical pairwise slopes dx = 0)', () => {
-    // Two samples share identical X=0.3
-    const items = makeComparisonItems([
-      [0.1, 0.1],
-      [0.3, 0.32],
-      [0.3, 0.28],
-      [0.6, 0.61],
-    ]);
-    const pb = computePassingBablok(items);
-    expect(pb).not.toBeNull();
-    expect(pb?.tiedXPairs).toBeGreaterThan(0);
-    // Classical Passing-Bablok treats vertical slopes as +infinity in ranking without throwing
-    expect(Number.isFinite(pb?.slope)).toBe(true);
-    expect(pb?.slope).toBeCloseTo(1.06, 2);
-  });
-
-  it('Fixture 5: Handled tied y values (horizontal pairwise slopes dy = 0)', () => {
-    // Two samples share identical Y=0.3
-    const items = makeComparisonItems([
-      [0.1, 0.1],
-      [0.29, 0.3],
-      [0.31, 0.3],
-      [0.6, 0.6],
-    ]);
-    const pb = computePassingBablok(items);
-    expect(pb).not.toBeNull();
-    expect(pb?.tiedYPairs).toBeGreaterThan(0);
-    expect(Number.isFinite(pb?.slope)).toBe(true);
-    expect(pb?.slope).toBeCloseTo(1.0, 1);
-  });
-
-  it('Fixture 6: Handled negative slopes and S = -1 exclusions', () => {
-    // Pair 1 & Pair 2 has slope exactly -1.0: (0.7 - 0.8) / (0.3 - 0.2) = -0.1 / 0.1 = -1.0
-    // Other pairs have negative slopes different from -1.0
-    const items = makeComparisonItems([
-      [0.1, 0.95],
-      [0.2, 0.80],
-      [0.3, 0.70],
-      [0.6, 0.40],
-      [0.9, 0.12],
-    ]);
-    const pb = computePassingBablok(items);
-    expect(pb).not.toBeNull();
-    expect(pb?.sMinusOnePairs).toBe(3); // S = -1 pairs successfully identified and excluded
-    expect(pb?.slope).toBeLessThan(0); // Valid negative slope computed
-    expect(Number.isFinite(pb?.slope)).toBe(true);
-    expect(pb?.slope).toBeCloseTo(-1.5, 1);
-  });
-
-  it('Fixture 7: Near-zero dx (epsilon tolerance)', () => {
-    // Extremely tiny dx = 1e-8
-    const items = makeComparisonItems([
-      [0.1, 0.1],
-      [0.2, 0.2],
-      [0.2 + 1e-8, 0.2 + 1e-8],
-      [0.5, 0.5],
-    ]);
-    const pb = computePassingBablok(items);
-    expect(pb).not.toBeNull();
-    expect(Number.isFinite(pb?.slope)).toBe(true);
-    expect(pb?.slope).toBeCloseTo(1.0, 2);
-  });
-
-  it('Fixture 8: Linearity Cusum Diagnostic correctly detects non-linear curvature', () => {
-    // Strongly bowed parabolic curve: y = (x - 1.3)^2 over 25 points
-    // Residuals from linear fit form a sustained streak on one side
-    const points: [number, number][] = [];
-    for (let i = 1; i <= 25; i++) {
-      const x = i * 0.1;
-      const y = (x - 1.3) * (x - 1.3);
-      points.push([x, y]);
-    }
-    const items = makeComparisonItems(points);
-    const pb = computePassingBablok(items);
-    expect(pb).not.toBeNull();
-    expect(pb?.cusumStat).toBeGreaterThan(pb!.cusumCritical);
-    expect(pb?.isLinear).toBe(false); // detects significant deviation from linearity
-  });
-});
-
-describe('H. Deming Orthogonal Regression Benchmarks & Assumptions', () => {
+describe('G. Deming Orthogonal Regression Benchmarks & Assumptions', () => {
   it('Deming calculates orthogonal slope = 1.0, intercept = 0.0 for identity line with λ = 1', () => {
     const items = makeComparisonItems([
       [0.1, 0.1],
@@ -758,8 +626,6 @@ describe('J. Tone & Language Neutrality Constraints', () => {
 
     const fullText = (
       (summary?.concordanceStatement ?? '') +
-      ' ' +
-      (summary?.passingBablok?.interpretationNote ?? '') +
       ' ' +
       (summary?.deming?.assumptionStatement ?? '')
     ).toLowerCase();
