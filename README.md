@@ -52,7 +52,7 @@ npm run build
 
 ## 🔬 Optional: Running the Python Offline Script
 
-If you want to run the standalone Python CLI tool independently in a terminal:
+If you want to run the standalone Python CLI tool independently in a terminal(not exact function as the web):
 
 ```bash
 python3 research_scripts/endotoxin_validation.py
