@@ -1,60 +1,102 @@
 import React, { useState } from 'react';
-import { SampleRow, SampleEstimateResult, CalibrationModelFit } from '../types';
-import { summarizeReplicates, parseReplicates, parseReplicatesDetailed, mean } from '../utils/math';
-import { parseSampleCsvImport } from '../utils/csv';
+import {
+  SampleRow,
+  PoSampleRow,
+  SampleEstimateResult,
+  KineticResult,
+  CalibrationModelFit,
+  KineticCalibrationModel,
+  AssayComparisonItem,
+  PoInputMode,
+} from '../types';
+import { parseReplicates, mean } from '../utils/math';
 import {
   Plus,
   Trash2,
   Download,
-  Clipboard,
   Calculator,
   RotateCcw,
   CheckCircle2,
   AlertTriangle,
-  Info,
+  ArrowRight,
   Sliders,
+  Check,
+  Split,
+  Layers,
 } from 'lucide-react';
 
 interface SampleEstimatorTabProps {
-  rows: SampleRow[];
-  setRows: React.Dispatch<React.SetStateAction<SampleRow[]>>;
+  coagRows: SampleRow[];
+  setCoagRows: React.Dispatch<React.SetStateAction<SampleRow[]>>;
+  poRows: PoSampleRow[];
+  setPoRows: React.Dispatch<React.SetStateAction<PoSampleRow[]>>;
   calibration: CalibrationModelFit | null;
+  kineticModel: KineticCalibrationModel | null;
+  timePoints: number[];
   coagWavelength?: number;
-  results: SampleEstimateResult[];
+  poWavelength?: number;
+  coagResults: SampleEstimateResult[];
+  poResults: KineticResult[];
+  comparisons?: AssayComparisonItem[];
   threshold: number;
   setThreshold: (t: number) => void;
   thresholdBasis?: string;
   setThresholdBasis?: (basis: string) => void;
-  onEstimate: () => void;
-  onClear: () => void;
+  onEstimateAll: () => void;
+  onEstimateCoag?: () => void;
+  onEstimatePo?: () => void;
+  onClearAll: () => void;
   onDownloadCsv: () => void;
   onLoadExample?: () => void;
+  onGoToConcordance?: () => void;
+  onGoToCoagCurve?: () => void;
+  onGoToPoCurve?: () => void;
+  errorMessage?: string | null;
 }
 
 export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
-  rows,
-  setRows,
+  coagRows,
+  setCoagRows,
+  poRows,
+  setPoRows,
   calibration,
-  coagWavelength = 545,
-  results,
+  kineticModel,
+  timePoints,
+  coagWavelength = 540,
+  poWavelength = 490,
+  coagResults = [],
+  poResults = [],
+  comparisons = [],
   threshold,
   setThreshold,
   thresholdBasis = 'Investigational study-defined screening cut-off',
   setThresholdBasis,
-  onEstimate,
-  onClear,
+  onEstimateAll,
+  onEstimateCoag,
+  onEstimatePo,
+  onClearAll,
   onDownloadCsv,
   onLoadExample,
+  onGoToConcordance,
+  onGoToCoagCurve,
+  onGoToPoCurve,
+  errorMessage,
 }) => {
-  const [showPasteBox, setShowPasteBox] = useState(false);
-  const [pasteText, setPasteText] = useState('');
+  const [poMode, setPoMode] = useState<PoInputMode>('series');
+  const [layoutView, setLayoutView] = useState<'both' | 'coag' | 'po'>('both');
 
-  const handleAddRow = () => {
-    const nextIdx = rows.length + 1;
-    setRows((prev) => [
+  const handleSwitchPoMode = (mode: PoInputMode) => {
+    setPoMode(mode);
+    setPoRows((prev) => prev.map((r) => ({ ...r, inputMode: mode })));
+  };
+
+  // Coagulation row handlers
+  const handleAddCoagRow = () => {
+    const nextIdx = coagRows.length + 1;
+    setCoagRows((prev) => [
       ...prev,
       {
-        id: Math.random().toString(),
+        id: 'coag_smp_' + Date.now().toString().slice(-5),
         sampleId: `S${nextIdx}`,
         name: `Sample ${nextIdx}`,
         abs: '',
@@ -64,16 +106,29 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
     ]);
   };
 
-  const handleRemoveRow = (id: string) => {
-    setRows((prev) => prev.filter((r) => r.id !== id));
+  const handleRemoveCoagRow = (id: string) => {
+    if (coagRows.length <= 1) {
+      setCoagRows([
+        {
+          id: 'coag_smp_1',
+          sampleId: 'S1',
+          name: 'Sample 1',
+          abs: '',
+          replicates: '',
+          dilutionFactor: '1',
+        },
+      ]);
+      return;
+    }
+    setCoagRows((prev) => prev.filter((r) => r.id !== id));
   };
 
-  const handleRowChange = (
+  const handleCoagRowChange = (
     id: string,
-    field: 'name' | 'abs' | 'replicates' | 'sampleId' | 'dilutionFactor',
+    field: keyof SampleRow,
     val: string
   ) => {
-    setRows((prev) =>
+    setCoagRows((prev) =>
       prev.map((row) => {
         if (row.id !== id) return row;
         const updated = { ...row, [field]: val };
@@ -86,397 +141,865 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
               updated.abs = calculatedMean.toFixed(4);
             }
           }
-          updated.meanReadOnly = false;
-        } else if (field === 'abs') {
-          updated.meanReadOnly = false;
         }
         return updated;
       })
     );
   };
 
-  const handleImportPaste = () => {
-    if (!pasteText.trim()) return;
-    const newRows = parseSampleCsvImport(pasteText, rows.length);
-    if (newRows.length > 0) {
-      setRows((prev) => [...prev, ...newRows]);
-      setPasteText('');
-      setShowPasteBox(false);
-    }
+  // Phenoloxidase row handlers
+  const handleAddPoRow = () => {
+    const nextIdx = poRows.length + 1;
+    setPoRows((prev) => [
+      ...prev,
+      {
+        id: 'po_smp_' + Date.now().toString().slice(-5),
+        sampleId: `S${nextIdx}`,
+        name: `Sample ${nextIdx}`,
+        readings: {},
+      },
+    ]);
   };
+
+  const handleRemovePoRow = (id: string) => {
+    if (poRows.length <= 1) {
+      setPoRows([
+        {
+          id: 'po_smp_1',
+          sampleId: 'S1',
+          name: 'Sample 1',
+          readings: {},
+        },
+      ]);
+      return;
+    }
+    setPoRows((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  const handlePoRowChange = (
+    id: string,
+    field: keyof PoSampleRow,
+    val: string
+  ) => {
+    setPoRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== id) return row;
+        const updated = { ...row, [field]: val };
+        if (field === 'directRate') {
+          updated.inputMode = 'direct_rate';
+        }
+        return updated;
+      })
+    );
+  };
+
+  const handlePoReadingChange = (id: string, time: number, val: string) => {
+    setPoRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== id) return row;
+        return {
+          ...row,
+          inputMode: 'series',
+          readings: {
+            ...row.readings,
+            [time]: val,
+          },
+        };
+      })
+    );
+  };
+
+  // Categorize results: Matched pairs vs Single-assay only
+  const coagSampleIds = new Set(
+    coagResults.map((c) => (c.sampleId || '').trim().toUpperCase())
+  );
+  const poSampleIds = new Set(
+    poResults.map((p) => (p.sampleId || '').trim().toUpperCase())
+  );
+
+  const coagOnlyResults = coagResults.filter(
+    (c) => !poSampleIds.has((c.sampleId || '').trim().toUpperCase())
+  );
+
+  const poOnlyResults = poResults.filter(
+    (p) => !coagSampleIds.has((p.sampleId || '').trim().toUpperCase())
+  );
+
+  const eligibleComparisons = comparisons.filter(
+    (c) => c.isEligibleForQuantitativeStats
+  );
+  const tier1Count = comparisons.filter((c) => c.concordance === 'high').length;
+  const discordantCount = comparisons.filter((c) => c.concordance === 'discordant').length;
 
   return (
     <div className="space-y-6">
+      {/* Top Banner / Explanation */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
-        {/* Header bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/60">
           <div>
-            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-tight">
-              Coagulation Sample Estimator
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-tight flex items-center gap-2">
+              <Calculator className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              Dual-Assay Sample Estimator
             </h2>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Interpolate unknown test infusion endotoxin levels using fitted calibration curve at {coagWavelength} nm
+              Independent test tables for Coagulation ({coagWavelength} nm) and Phenoloxidase ({poWavelength} nm). Samples sharing a matching Sample ID are automatically paired for cross-assay concordance.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 dark:text-slate-300">
-            <div className="flex items-center gap-1.5">
-              <span className="font-medium text-slate-700 dark:text-slate-300">Study-defined decision threshold:</span>
-              <input
-                type="number"
-                step="0.05"
-                value={threshold}
-                onChange={(e) =>
-                  setThreshold(parseFloat(e.target.value) || 0)
-                }
-                className="w-20 font-mono text-xs px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 font-bold text-slate-800 dark:text-slate-100"
-              />
-              <span className="font-semibold text-slate-500 dark:text-slate-400">EU/mL</span>
-            </div>
-            {setThresholdBasis && (
-              <div className="flex items-center gap-1.5">
-                <span className="font-medium text-slate-700 dark:text-slate-300">Basis / Protocol:</span>
-                <input
-                  type="text"
-                  value={thresholdBasis}
-                  onChange={(e) => setThresholdBasis(e.target.value)}
-                  placeholder="e.g. Investigational screening cut-off"
-                  className="w-56 text-xs px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
-                />
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* Input area */}
-        <div className="p-5">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-[11px] uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
-                  <th className="text-left pb-2 font-medium w-24">
-                    Sample ID
-                  </th>
-                  <th className="text-left pb-2 font-medium">
-                    Sample / Batch Description
-                  </th>
-                  <th className="text-left pb-2 font-medium w-28">
-                    Absorbance ({coagWavelength}nm)
-                  </th>
-                  <th className="text-left pb-2 font-medium w-40">
-                    Replicates (optional)
-                  </th>
-                  <th className="text-left pb-2 font-medium w-20">
-                    DF
-                  </th>
-                  <th className="w-6"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {rows.map((row, idx) => {
-                  const detailed = parseReplicatesDetailed(row.replicates);
-                  const hasInvalidTokens = detailed.invalidTokens.length > 0;
-
-                  return (
-                    <tr key={row.id}>
-                      <td className="py-1.5 pr-2">
-                        <input
-                          type="text"
-                          placeholder={`S${idx + 1}`}
-                          value={row.sampleId ?? `S${idx + 1}`}
-                          onChange={(e) =>
-                            handleRowChange(row.id, 'sampleId', e.target.value)
-                          }
-                          className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-850 text-xs font-mono font-bold text-indigo-700 dark:text-indigo-400 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500"
-                        />
-                      </td>
-                      <td className="py-1.5 pr-2">
-                        <input
-                          type="text"
-                          placeholder="e.g. 5% Dextrose Infusion"
-                          value={row.name}
-                          onChange={(e) =>
-                            handleRowChange(row.id, 'name', e.target.value)
-                          }
-                          className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-850 text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800 font-medium"
-                        />
-                      </td>
-                      <td className="py-1.5 pr-2">
-                        <input
-                          type="number"
-                          step="any"
-                          placeholder="e.g. 0.082"
-                          value={row.abs}
-                          onChange={(e) =>
-                            handleRowChange(row.id, 'abs', e.target.value)
-                          }
-                          className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-850 font-mono text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800"
-                        />
-                      </td>
-                      <td className="py-1.5 pr-2">
-                        <input
-                          type="text"
-                          placeholder="e.g. 0.081, 0.083"
-                          value={row.replicates}
-                          onChange={(e) =>
-                            handleRowChange(row.id, 'replicates', e.target.value)
-                          }
-                          className={`w-full border ${hasInvalidTokens ? 'border-amber-400 dark:border-amber-600' : 'border-slate-200 dark:border-slate-700'} bg-slate-50/50 dark:bg-slate-850 font-mono text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800`}
-                        />
-                        {hasInvalidTokens && (
-                          <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-0.5">
-                            Ignored: {detailed.invalidTokens.join(', ')}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-1.5 pr-2">
-                        <input
-                          type="number"
-                          step="any"
-                          min="1"
-                          placeholder="1"
-                          value={row.dilutionFactor ?? '1'}
-                          onChange={(e) =>
-                            handleRowChange(row.id, 'dilutionFactor', e.target.value)
-                          }
-                          className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-850 font-mono text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 text-center"
-                          title="Dilution factor (e.g. 10 for 1:10 dilution)"
-                        />
-                      </td>
-                      <td className="py-1.5 text-center">
-                        <button
-                          onClick={() => handleRemoveRow(row.id)}
-                          className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition p-1 rounded cursor-pointer"
-                          title="Remove sample"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
-            <button
-              onClick={handleAddRow}
-              className="px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center gap-1 cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" /> Add sample
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
             {onLoadExample && (
               <button
                 onClick={onLoadExample}
-                className="px-3 py-1.5 rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-medium hover:bg-indigo-100/70 dark:hover:bg-indigo-900/60 transition shadow-2xs cursor-pointer"
-                title="Load example test samples"
+                className="px-3 py-1.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 rounded-lg transition cursor-pointer"
               >
-                Load Example
+                Load Example Samples
               </button>
             )}
+
             <button
-              onClick={onClear}
-              className="px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center gap-1 cursor-pointer"
+              onClick={onClearAll}
+              className="px-2.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 border border-slate-200 dark:border-slate-700 rounded-lg transition flex items-center gap-1 cursor-pointer"
             >
-              <RotateCcw className="w-3.5 h-3.5" /> Clear
-            </button>
-            <button
-              onClick={() => setShowPasteBox(!showPasteBox)}
-              className="px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center gap-1 cursor-pointer"
-            >
-              <Clipboard className="w-3.5 h-3.5" /> Paste multiple
-            </button>
-            <button
-              onClick={onEstimate}
-              disabled={!calibration}
-              className="px-4 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-600 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto"
-            >
-              <Calculator className="w-3.5 h-3.5" /> Estimate Concentrations
+              <RotateCcw className="w-3.5 h-3.5" /> Clear All
             </button>
           </div>
-
-          {showPasteBox && (
-            <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-850 rounded-lg border border-slate-200 dark:border-slate-700 space-y-2">
-              <p className="text-xs text-slate-600 dark:text-slate-400">
-                Paste comma-separated rows: <span className="font-mono text-slate-800 dark:text-slate-200">Sample Name, Mean Absorbance, Replicates</span>
-              </p>
-              <textarea
-                rows={3}
-                value={pasteText}
-                onChange={(e) => setPasteText(e.target.value)}
-                placeholder="Sample A, 0.125, 0.124, 0.126&#10;Sample B, 0.045"
-                className="w-full text-xs font-mono p-2.5 border border-slate-200 dark:border-slate-700 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-              />
-              <button
-                onClick={handleImportPaste}
-                className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium cursor-pointer"
-              >
-                Import rows
-              </button>
-            </div>
-          )}
-
-          {!calibration && (
-            <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-2 bg-amber-50 dark:bg-amber-950/40 p-2.5 rounded-lg border border-amber-200/60 dark:border-amber-900/60 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
-              <span>Note: Compute the calibration curve in Tab 1 first to enable sample estimations.</span>
-            </p>
-          )}
         </div>
 
-        {/* Results table */}
-        <div className="border-t border-slate-200 dark:border-slate-800">
-          <div className="p-4 bg-amber-50/70 dark:bg-amber-950/30 border-b border-amber-200/60 dark:border-amber-900/50 flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-200">
-            <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-            <div className="text-[11px] leading-relaxed">
-              <strong>Persistent Research Notice:</strong> Archachatina marginata bioassay data are analyzed for investigational and research purposes only. This tool evaluates sample readings against study-configured parameters and does not establish clinical, regulatory, pharmacopeial, product-release, or patient-safety conclusions.
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 bg-slate-50/60 dark:bg-slate-800/60">
-            <div>
-              <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-                Calculated Endotoxin Concentrations &amp; Analytical Evaluation
-              </h3>
-              {calibration && (
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                  Active Calibration Standards Range:{' '}
-                  <span className="font-mono font-semibold text-indigo-700 dark:text-indigo-400">
-                    {calibration.xMin.toFixed(3)} – {calibration.xMax.toFixed(3)} EU/mL
-                  </span>{' '}
-                  ({calibration.type.toUpperCase()}, R&sup2; = {calibration.r2.toFixed(4)})
-                </div>
+        {/* Calibration Curves Status Bar */}
+        <div className="px-5 py-2.5 bg-slate-50/40 dark:bg-slate-850/50 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Coagulation Curve Status */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                1. Coagulation Curve:
+              </span>
+              {calibration ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                  <Check className="w-3 h-3" />
+                  {calibration.type.toUpperCase()} (R² = {calibration.r2.toFixed(3)})
+                </span>
+              ) : (
+                <button
+                  onClick={onGoToCoagCurve}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:underline cursor-pointer"
+                >
+                  <AlertTriangle className="w-3 h-3 text-amber-500" />
+                  Fit Curve Needed &rarr;
+                </button>
               )}
             </div>
-            <button
-              onClick={onDownloadCsv}
-              disabled={!results.length}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition disabled:opacity-40 cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5" /> Download Research CSV
-            </button>
+
+            {/* Phenoloxidase Curve Status */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                2. PO Kinetic Curve:
+              </span>
+              {kineticModel ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-violet-50 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800">
+                  <Check className="w-3 h-3" />
+                  Rate = {kineticModel.slope.toFixed(4)}x + {kineticModel.intercept.toFixed(4)} (R² = {kineticModel.r2.toFixed(3)})
+                </span>
+              ) : (
+                <button
+                  onClick={onGoToPoCurve}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:underline cursor-pointer"
+                >
+                  <AlertTriangle className="w-3 h-3 text-amber-500" />
+                  Fit Curve Needed &rarr;
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="text-left text-[11px] uppercase tracking-wider text-slate-400 border-y border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/40">
-                  <th className="px-4 py-2.5 font-medium">Sample ID &amp; Name</th>
-                  <th className="px-4 py-2.5 font-medium">Mean Abs ({coagWavelength}nm Doc)</th>
-                  <th className="px-4 py-2.5 font-medium">Estimated Concentration</th>
-                  <th className="px-4 py-2.5 font-medium">Analytical Validity &amp; Range</th>
-                  <th className="px-4 py-2.5 font-medium">Study Threshold Decision</th>
-                  <th className="px-4 py-2.5 font-medium">Remarks</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {results.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      className="px-5 py-6 text-center text-slate-400 italic text-xs"
-                    >
-                      No estimated results yet. Click "Estimate Concentrations" above.
-                    </td>
-                  </tr>
-                ) : (
-                  results.map((r, idx) => {
-                    const repText =
-                      r.n > 1
-                        ? `${r.n} repl · SD ${Number.isFinite(r.sd) ? r.sd.toFixed(4) : '—'} · CV ${Number.isFinite(r.cv) ? r.cv.toFixed(1) + '%' : '—'}`
-                        : 'Single reading';
-
-                    let rangeLabel = 'Interpolated (In Cal Range)';
-                    let rangeBadgeClass = 'bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800';
-
-                    if (r.analyticalStatus === 'BELOW_BLANK') {
-                      rangeLabel = 'Below Blank (< LOD)';
-                      rangeBadgeClass = 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700';
-                    } else if (r.analyticalStatus === 'OUT_OF_RANGE') {
-                      rangeLabel = 'Extrapolated (> Cal Upper)';
-                      rangeBadgeClass = 'bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700';
-                    } else if (r.analyticalStatus === 'INVALID_INPUT' || r.invalidInput) {
-                      rangeLabel = 'Invalid Reading';
-                      rangeBadgeClass = 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-800';
-                    } else if (r.analyticalStatus === 'AMBIGUOUS' || r.ambiguous) {
-                      rangeLabel = 'Ambiguous Multi-Root';
-                      rangeBadgeClass = 'bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border-purple-300 dark:border-purple-800';
-                    }
-
-                    return (
-                      <tr key={idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50">
-                        <td className="px-4 py-3 font-semibold text-slate-800 dark:text-slate-100">
-                          <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500 mr-1.5">[{r.sampleId}]</span>
-                          {r.name}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-slate-700 dark:text-slate-300">
-                          {r.abs.toFixed(4)}
-                          <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 font-sans font-normal">
-                            {repText}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 font-mono">
-                          {r.reportedEu !== null && Number.isFinite(r.reportedEu) ? (
-                            <div>
-                              <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">
-                                {r.reportedEu.toFixed(3)}
-                              </span>{' '}
-                              <span className="text-[11px] font-sans font-normal text-slate-500 dark:text-slate-400">EU/mL</span>
-                              {r.dilutionFactor > 1 && (
-                                <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-sans mt-0.5">
-                                  DF {r.dilutionFactor}× (raw: {r.originalConcentration?.toFixed(3)} EU/mL)
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="font-bold text-amber-700 dark:text-amber-400 text-xs font-mono">
-                              {r.reportableText}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border ${rangeBadgeClass}`}>
-                            {rangeLabel}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                              r.compliance === 'PASS'
-                                ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                                : r.compliance === 'FLAGGED'
-                                ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
-                                : 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
-                            }`}
-                          >
-                            {r.compliance === 'PASS'
-                              ? `Below Study Threshold (≤ ${threshold.toFixed(3)} EU/mL)`
-                              : r.compliance === 'FLAGGED'
-                              ? `Above Study Threshold (> ${threshold.toFixed(3)} EU/mL)`
-                              : 'Inconclusive / Review'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-slate-600 dark:text-slate-300 text-xs">
-                          {r.remark}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+          {/* Study Threshold Controls */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+              Study Threshold:
+            </span>
+            <input
+              type="number"
+              step="0.05"
+              min="0"
+              value={threshold}
+              onChange={(e) => setThreshold(parseFloat(e.target.value) || 0.5)}
+              className="w-16 text-center text-xs font-mono font-bold px-1.5 py-0.5 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+            />
+            <span className="text-[10px] text-slate-400">EU/mL</span>
           </div>
         </div>
 
-        {/* Status Guide Footer Card */}
-        <div className="p-4 bg-slate-50/80 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-start gap-2.5 text-xs text-slate-600 dark:text-slate-400">
-          <Info className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
-          <div className="text-[11px] leading-relaxed">
-            <strong>Study Threshold Protocol Notice:</strong> Endotoxin decision thresholds are study-defined parameters and depend on the specific formulation, route, and research protocol. This investigational analysis software evaluates sample readings against the configured study decision threshold. It does not establish clinical, regulatory, pharmacopeial, product-release, or patient-safety conclusions.
+        {/* View Switcher Bar */}
+        <div className="px-5 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => setLayoutView('both')}
+              className={`px-2.5 py-1 rounded font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                layoutView === 'both'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              <Split className="w-3.5 h-3.5" /> Both Assays (Independent Tables)
+            </button>
+            <button
+              onClick={() => setLayoutView('coag')}
+              className={`px-2.5 py-1 rounded font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                layoutView === 'coag'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              Coagulation Only ({coagRows.length})
+            </button>
+            <button
+              onClick={() => setLayoutView('po')}
+              className={`px-2.5 py-1 rounded font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                layoutView === 'po'
+                  ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              Phenoloxidase Only ({poRows.length})
+            </button>
+          </div>
+
+          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+            Coagulation: {coagRows.length} sample(s) &bull; Phenoloxidase: {poRows.length} sample(s)
+          </div>
+        </div>
+
+        {/* The Two Independent Input Tables */}
+        <div className="p-5 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* TABLE 1: Coagulation Samples Table */}
+            {(layoutView === 'both' || layoutView === 'coag') && (
+              <div className="bg-slate-50/50 dark:bg-slate-850 border border-indigo-100 dark:border-indigo-900/50 rounded-xl p-4 space-y-3 flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-indigo-100 dark:border-indigo-900/50">
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-indigo-600 inline-block"></span>
+                        Table 1: Coagulation Turbidimetric Samples
+                      </h3>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                        Endpoint absorbance (OD at {coagWavelength} nm)
+                      </p>
+                    </div>
+                    <span className="px-2 py-0.5 rounded font-mono text-[10px] font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300">
+                      {coagRows.length} sample(s)
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto border border-slate-200 dark:border-slate-700/80 rounded-lg bg-white dark:bg-slate-900">
+                    <table className="w-full text-xs text-left border-collapse min-w-[340px]">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold text-[11px]">
+                          <th className="px-2.5 py-2 w-20">Sample ID</th>
+                          <th className="px-2.5 py-2">Description</th>
+                          <th className="px-2 py-2 text-center w-20">OD ({coagWavelength}nm)</th>
+                          <th className="px-2 py-2 text-center w-24">Replicates</th>
+                          <th className="px-1.5 py-2 text-center w-12">DF</th>
+                          <th className="px-1 py-2 w-7"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {coagRows.map((row, idx) => (
+                          <tr key={row.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                            <td className="p-1">
+                              <input
+                                type="text"
+                                value={row.sampleId ?? `S${idx + 1}`}
+                                onChange={(e) => handleCoagRowChange(row.id, 'sampleId', e.target.value)}
+                                placeholder={`S${idx + 1}`}
+                                title="Sample ID (matched across assays)"
+                                className="w-16 px-1.5 py-1 text-xs font-mono font-bold text-indigo-700 dark:text-indigo-400 border border-slate-200 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-850 outline-none focus:border-indigo-500"
+                              />
+                            </td>
+                            <td className="p-1">
+                              <input
+                                type="text"
+                                value={row.name}
+                                onChange={(e) => handleCoagRowChange(row.id, 'name', e.target.value)}
+                                placeholder="e.g. Infusion A"
+                                className="w-full px-2 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none"
+                              />
+                            </td>
+                            <td className="p-1 text-center">
+                              <input
+                                type="number"
+                                step="any"
+                                value={row.abs}
+                                onChange={(e) => handleCoagRowChange(row.id, 'abs', e.target.value)}
+                                placeholder="0.082"
+                                className="w-16 text-center px-1 py-1 text-xs font-mono font-bold border border-indigo-200 dark:border-indigo-800 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none"
+                              />
+                            </td>
+                            <td className="p-1 text-center">
+                              <input
+                                type="text"
+                                value={row.replicates ?? ''}
+                                onChange={(e) => handleCoagRowChange(row.id, 'replicates', e.target.value)}
+                                placeholder="opt"
+                                className="w-20 text-center px-1 py-1 text-[11px] font-mono border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none"
+                              />
+                            </td>
+                            <td className="p-1 text-center">
+                              <input
+                                type="number"
+                                step="1"
+                                min="1"
+                                value={row.dilutionFactor ?? '1'}
+                                onChange={(e) => handleCoagRowChange(row.id, 'dilutionFactor', e.target.value)}
+                                placeholder="1"
+                                className="w-10 text-center px-1 py-1 text-xs font-mono border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none"
+                              />
+                            </td>
+                            <td className="p-1 text-center">
+                              <button
+                                onClick={() => handleRemoveCoagRow(row.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
+                                title="Delete row"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <button
+                      onClick={handleAddCoagRow}
+                      className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:text-indigo-900 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 px-2.5 py-1 rounded-md flex items-center gap-1 transition cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Coag Sample
+                    </button>
+                    {onEstimateCoag && (
+                      <button
+                        onClick={onEstimateCoag}
+                        className="text-xs font-semibold text-indigo-600 hover:underline cursor-pointer"
+                      >
+                        Estimate Coag Only
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TABLE 2: Phenoloxidase Samples Table */}
+            {(layoutView === 'both' || layoutView === 'po') && (
+              <div className="bg-slate-50/50 dark:bg-slate-850 border border-violet-100 dark:border-violet-900/50 rounded-xl p-4 space-y-3 flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-violet-100 dark:border-violet-900/50">
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-violet-950 dark:text-violet-200 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-violet-600 inline-block"></span>
+                        Table 2: Phenoloxidase Kinetic Samples
+                      </h3>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                        Enzymatic rate measurements at {poWavelength} nm
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <span className="px-2 py-0.5 rounded font-mono text-[10px] font-bold bg-violet-100 dark:bg-violet-950 text-violet-800 dark:text-violet-300 mr-1">
+                        {poRows.length} sample(s)
+                      </span>
+                      <div className="flex items-center bg-white dark:bg-slate-800 p-0.5 rounded border border-slate-200 dark:border-slate-700 text-[10px]">
+                        <button
+                          onClick={() => handleSwitchPoMode('series')}
+                          className={`px-1.5 py-0.5 rounded font-medium ${
+                            poMode === 'series'
+                              ? 'bg-violet-600 text-white font-bold'
+                              : 'text-slate-500'
+                          }`}
+                        >
+                          Series
+                        </button>
+                        <button
+                          onClick={() => handleSwitchPoMode('direct_rate')}
+                          className={`px-1.5 py-0.5 rounded font-medium ${
+                            poMode === 'direct_rate'
+                              ? 'bg-violet-600 text-white font-bold'
+                              : 'text-slate-500'
+                          }`}
+                        >
+                          Direct Rate
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto border border-slate-200 dark:border-slate-700/80 rounded-lg bg-white dark:bg-slate-900">
+                    <table className="w-full text-xs text-left border-collapse min-w-[340px]">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold text-[11px]">
+                          <th className="px-2.5 py-2 w-20">Sample ID</th>
+                          <th className="px-2.5 py-2">Description</th>
+                          {poMode === 'series' ? (
+                            timePoints.map((t) => (
+                              <th key={t} className="px-1 py-2 text-center whitespace-nowrap font-mono text-[10px]">
+                                {t}m
+                              </th>
+                            ))
+                          ) : (
+                            <th className="px-2 py-2 text-center w-28 font-bold text-violet-800 dark:text-violet-300">
+                              dA/dt (OD/min)
+                            </th>
+                          )}
+                          <th className="px-1 py-2 w-7"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {poRows.map((row, idx) => (
+                          <tr key={row.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                            <td className="p-1">
+                              <input
+                                type="text"
+                                value={row.sampleId ?? `S${idx + 1}`}
+                                onChange={(e) => handlePoRowChange(row.id, 'sampleId', e.target.value)}
+                                placeholder={`S${idx + 1}`}
+                                title="Sample ID (matched across assays)"
+                                className="w-16 px-1.5 py-1 text-xs font-mono font-bold text-violet-700 dark:text-violet-400 border border-slate-200 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-850 outline-none focus:border-violet-500"
+                              />
+                            </td>
+                            <td className="p-1">
+                              <input
+                                type="text"
+                                value={row.name}
+                                onChange={(e) => handlePoRowChange(row.id, 'name', e.target.value)}
+                                placeholder="e.g. Infusion A"
+                                className="w-full px-2 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none"
+                              />
+                            </td>
+
+                            {poMode === 'series' ? (
+                              timePoints.map((t) => (
+                                <td key={t} className="p-1 text-center">
+                                  <input
+                                    type="number"
+                                    step="0.001"
+                                    value={row.readings[t] ?? ''}
+                                    onChange={(e) => handlePoReadingChange(row.id, t, e.target.value)}
+                                    placeholder="0.00"
+                                    className="w-12 text-center px-0.5 py-1 text-[11px] font-mono border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none"
+                                  />
+                                </td>
+                              ))
+                            ) : (
+                              <td className="p-1 text-center">
+                                <input
+                                  type="number"
+                                  step="0.0001"
+                                  value={row.directRate ?? ''}
+                                  onChange={(e) => handlePoRowChange(row.id, 'directRate', e.target.value)}
+                                  placeholder="0.0085"
+                                  className="w-24 text-center px-1.5 py-1 text-xs font-mono font-bold border border-violet-200 dark:border-violet-800 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none"
+                                />
+                              </td>
+                            )}
+
+                            <td className="p-1 text-center">
+                              <button
+                                onClick={() => handleRemovePoRow(row.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
+                                title="Delete row"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <button
+                      onClick={handleAddPoRow}
+                      className="text-xs font-semibold text-violet-700 dark:text-violet-300 hover:text-violet-900 bg-white dark:bg-slate-800 border border-violet-200 dark:border-violet-800 px-2.5 py-1 rounded-md flex items-center gap-1 transition cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add PO Sample
+                    </button>
+                    {onEstimatePo && (
+                      <button
+                        onClick={onEstimatePo}
+                        className="text-xs font-semibold text-violet-600 hover:underline cursor-pointer"
+                      >
+                        Estimate PO Only
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Error / Validation Feedback */}
+          {errorMessage && (
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-800 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {!calibration && onGoToCoagCurve && (
+                  <button
+                    onClick={onGoToCoagCurve}
+                    className="px-2.5 py-1 font-bold text-xs bg-white dark:bg-slate-800 rounded border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:underline cursor-pointer"
+                  >
+                    1. Fit Coag Curve
+                  </button>
+                )}
+                {!kineticModel && onGoToPoCurve && (
+                  <button
+                    onClick={onGoToPoCurve}
+                    className="px-2.5 py-1 font-bold text-xs bg-white dark:bg-slate-800 rounded border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:underline cursor-pointer"
+                  >
+                    2. Fit PO Curve
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Master Estimation Action Bar */}
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <button
+              onClick={onEstimateAll}
+              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition flex items-center gap-2 shadow-xs cursor-pointer"
+            >
+              <Calculator className="w-4 h-4" />
+              Estimate Unknown Concentrations (Both Assays)
+            </button>
+
+            {onGoToConcordance && comparisons.length > 0 && (
+              <button
+                onClick={onGoToConcordance}
+                className="px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>View Full Deming &amp; Bland–Altman Analysis</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
       </div>
+
+      {/* RESULTS SECTION: Matched Pairs vs Single-Assay Only */}
+      {(coagResults.length > 0 || poResults.length > 0) && (
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs p-5 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                Estimation Results &amp; Cross-Assay Concordance
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Samples sharing identical Sample IDs are matched as cross-assay pairs. Unmatched samples are reported as single-assay.
+              </p>
+            </div>
+
+            {onDownloadCsv && (
+              <button
+                onClick={onDownloadCsv}
+                className="px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-500" />
+                Export Results CSV
+              </button>
+            )}
+          </div>
+
+          {/* Quick Stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="p-3 bg-slate-50 dark:bg-slate-850 rounded-lg border border-slate-200 dark:border-slate-800 text-center">
+              <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">
+                Total Samples Tested
+              </span>
+              <span className="text-lg font-bold font-mono text-slate-900 dark:text-slate-100">
+                {coagResults.length + poResults.length}
+              </span>
+              <span className="text-[10px] text-slate-400">
+                {coagResults.length} Coag &bull; {poResults.length} PO
+              </span>
+            </div>
+
+            <div className="p-3 bg-slate-50 dark:bg-slate-850 rounded-lg border border-slate-200 dark:border-slate-800 text-center">
+              <span className="text-[10px] text-indigo-500 uppercase font-bold block mb-0.5">
+                Matched Pairs
+              </span>
+              <span className="text-lg font-bold font-mono text-indigo-700 dark:text-indigo-300">
+                {comparisons.length}
+              </span>
+              <span className="text-[10px] text-slate-400">
+                {eligibleComparisons.length} quantifiable
+              </span>
+            </div>
+
+            <div className="p-3 bg-slate-50 dark:bg-slate-850 rounded-lg border border-slate-200 dark:border-slate-800 text-center">
+              <span className="text-[10px] text-emerald-600 uppercase font-bold block mb-0.5">
+                Tier 1 Agreement (≤15%)
+              </span>
+              <span className="text-lg font-bold font-mono text-emerald-700 dark:text-emerald-300">
+                {tier1Count}
+              </span>
+              <span className="text-[10px] text-slate-400">
+                high concordance
+              </span>
+            </div>
+
+            <div className="p-3 bg-slate-50 dark:bg-slate-850 rounded-lg border border-slate-200 dark:border-slate-800 text-center">
+              <span className="text-[10px] text-rose-500 uppercase font-bold block mb-0.5">
+                Single-Assay Only
+              </span>
+              <span className="text-lg font-bold font-mono text-slate-700 dark:text-slate-300">
+                {coagOnlyResults.length + poOnlyResults.length}
+              </span>
+              <span className="text-[10px] text-slate-400">
+                {coagOnlyResults.length} Coag only &bull; {poOnlyResults.length} PO only
+              </span>
+            </div>
+          </div>
+
+          {/* SECTION 1: Matched Cross-Assay Pairs */}
+          {comparisons.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                Cross-Assay Matched Pairs ({comparisons.length} sample pairs sharing Sample ID)
+              </h4>
+
+              <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-lg">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 font-semibold text-[11px]">
+                      <th className="px-3 py-2.5">Sample ID &amp; Name</th>
+                      <th className="px-3 py-2.5 text-center font-bold text-indigo-900 dark:text-indigo-300 border-l border-slate-200 dark:border-slate-800">
+                        Coagulation EU/mL
+                      </th>
+                      <th className="px-3 py-2.5 text-center font-bold text-violet-900 dark:text-violet-300 border-l border-slate-200 dark:border-slate-800">
+                        Phenoloxidase EU/mL
+                      </th>
+                      <th className="px-3 py-2.5 text-center font-bold text-slate-800 dark:text-slate-200 border-l border-slate-200 dark:border-slate-800">
+                        |ΔEU|
+                      </th>
+                      <th className="px-3 py-2.5 text-center font-bold text-slate-800 dark:text-slate-200">
+                        RPD (%)
+                      </th>
+                      <th className="px-3 py-2.5 text-center">Concordance Tier</th>
+                      <th className="px-3 py-2.5">Remarks</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {comparisons.map((cmp) => {
+                      const isHigh = cmp.concordance === 'high';
+                      const isMod = cmp.concordance === 'moderate';
+                      const isDisc = cmp.concordance === 'discordant';
+                      const isExcluded = cmp.agreement === 'EXCLUDED';
+
+                      return (
+                        <tr key={cmp.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                          <td className="px-3 py-2.5 font-medium text-slate-900 dark:text-slate-100">
+                            <span className="font-mono text-[11px] font-bold text-indigo-700 dark:text-indigo-400 mr-1.5">
+                              [{cmp.sampleId}]
+                            </span>
+                            <span>{cmp.name}</span>
+                          </td>
+
+                          {/* Coagulation */}
+                          <td className="px-3 py-2.5 text-center font-mono border-l border-slate-200 dark:border-slate-800">
+                            {cmp.coagEu !== null && Number.isFinite(cmp.coagEu) ? (
+                              <div>
+                                <span className="font-bold text-indigo-900 dark:text-indigo-300 text-sm">
+                                  {cmp.coagEu.toFixed(3)}
+                                </span>
+                                <span className="text-[10px] text-slate-400 block">
+                                  ({Number.isFinite(cmp.coagAbs) ? cmp.coagAbs.toFixed(3) : '—'} OD)
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-amber-600 font-semibold text-[11px]">
+                                {cmp.coagStatus || '< LOD'}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Phenoloxidase */}
+                          <td className="px-3 py-2.5 text-center font-mono border-l border-slate-200 dark:border-slate-800">
+                            {cmp.poEu !== null && Number.isFinite(cmp.poEu) ? (
+                              <div>
+                                <span className="font-bold text-violet-900 dark:text-violet-300 text-sm">
+                                  {cmp.poEu.toFixed(3)}
+                                </span>
+                                <span className="text-[10px] text-slate-400 block">
+                                  ({Number.isFinite(cmp.poRate) ? cmp.poRate.toFixed(4) : '—'}/min)
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-amber-600 font-semibold text-[11px]">
+                                {cmp.poStatus || 'N/A'}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Absolute Difference */}
+                          <td className="px-3 py-2.5 text-center font-mono font-bold text-slate-800 dark:text-slate-200 border-l border-slate-200 dark:border-slate-800">
+                            {cmp.absDiff !== null && Number.isFinite(cmp.absDiff)
+                              ? cmp.absDiff.toFixed(4)
+                              : '—'}
+                          </td>
+
+                          {/* RPD */}
+                          <td className="px-3 py-2.5 text-center font-mono font-bold">
+                            {cmp.rpd !== null && Number.isFinite(cmp.rpd) ? (
+                              <span
+                                className={
+                                  isHigh
+                                    ? 'text-emerald-700 dark:text-emerald-400'
+                                    : isMod
+                                    ? 'text-amber-700 dark:text-amber-400'
+                                    : 'text-rose-600 dark:text-rose-400'
+                                }
+                              >
+                                {cmp.rpd.toFixed(1)}%
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
+                          </td>
+
+                          {/* Tier Badge */}
+                          <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                            {isExcluded ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                EXCLUDED
+                              </span>
+                            ) : (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                  isHigh
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                    : isMod
+                                    ? 'bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300'
+                                    : 'bg-rose-100 text-rose-800 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300'
+                                }`}
+                              >
+                                {isHigh ? (
+                                  <CheckCircle2 className="w-3 h-3" />
+                                ) : (
+                                  <AlertTriangle className="w-3 h-3" />
+                                )}
+                                {isHigh
+                                  ? 'Tier 1 (≤15%)'
+                                  : isMod
+                                  ? 'Tier 2 (≤25%)'
+                                  : 'Discordant (>25%)'}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400 text-[11px] leading-snug min-w-[200px]">
+                            {cmp.comment}
+                            {cmp.lowConcentrationWarning && (
+                              <div className="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5">
+                                {cmp.lowConcentrationWarning}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* SECTION 2: Single-Assay Only Samples (Tested in one assay, but not the other) */}
+          {(coagOnlyResults.length > 0 || poOnlyResults.length > 0) && (
+            <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-slate-500" />
+                Single-Assay Samples ({coagOnlyResults.length + poOnlyResults.length} samples tested in one method only)
+              </h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Coagulation-only */}
+                {coagOnlyResults.length > 0 && (
+                  <div className="border border-indigo-100 dark:border-indigo-900/50 rounded-lg p-3 bg-indigo-50/20 dark:bg-indigo-950/20 space-y-2">
+                    <span className="text-[11px] font-bold text-indigo-900 dark:text-indigo-300 uppercase block">
+                      Tested on Coagulation Only ({coagOnlyResults.length})
+                    </span>
+                    <div className="space-y-1.5">
+                      {coagOnlyResults.map((c) => (
+                        <div
+                          key={c.id}
+                          className="flex items-center justify-between p-2 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs"
+                        >
+                          <div>
+                            <span className="font-mono font-bold text-indigo-700 dark:text-indigo-400 mr-1.5">
+                              [{c.sampleId}]
+                            </span>
+                            <span className="font-medium">{c.name}</span>
+                          </div>
+                          <div className="text-right font-mono">
+                            <span className="font-bold text-indigo-900 dark:text-indigo-300">
+                              {c.reportedEu !== null && Number.isFinite(c.reportedEu)
+                                ? `${(c.reportedEu * c.dilutionFactor).toFixed(3)} EU/mL`
+                                : c.reportableText}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block">
+                              Not tested in PO
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Phenoloxidase-only */}
+                {poOnlyResults.length > 0 && (
+                  <div className="border border-violet-100 dark:border-violet-900/50 rounded-lg p-3 bg-violet-50/20 dark:bg-violet-950/20 space-y-2">
+                    <span className="text-[11px] font-bold text-violet-900 dark:text-violet-300 uppercase block">
+                      Tested on Phenoloxidase Only ({poOnlyResults.length})
+                    </span>
+                    <div className="space-y-1.5">
+                      {poOnlyResults.map((p) => (
+                        <div
+                          key={p.id}
+                          className="flex items-center justify-between p-2 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs"
+                        >
+                          <div>
+                            <span className="font-mono font-bold text-violet-700 dark:text-violet-400 mr-1.5">
+                              [{p.sampleId}]
+                            </span>
+                            <span className="font-medium">{p.name}</span>
+                          </div>
+                          <div className="text-right font-mono">
+                            <span className="font-bold text-violet-900 dark:text-violet-300">
+                              {p.reportedEu !== null && Number.isFinite(p.reportedEu)
+                                ? `${p.reportedEu.toFixed(3)} EU/mL`
+                                : p.reportableText}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block">
+                              Not tested in Coag
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
-

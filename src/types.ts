@@ -156,6 +156,45 @@ export interface SampleEstimateResult {
 // Phenoloxidase input mode: 'series' (time points) or 'direct_rate' (pre-calculated dA/min)
 export type PoInputMode = 'series' | 'direct_rate';
 
+// Standalone Phenoloxidase Standard Row (no sampleId needed for calibrators)
+export interface PoStandardRow {
+  id: string;
+  standardEu: string; // Endotoxin concentration EU/mL (e.g. "0.0", "0.5", "1.0", "2.0", "5.0")
+  name?: string;      // Label (optional)
+  inputMode?: PoInputMode;
+  directRate?: string;
+  readings: Record<number, string>;
+  linearRegionStart?: number;
+  linearRegionEnd?: number;
+}
+
+// Independent Phenoloxidase Sample Row
+export interface PoSampleRow {
+  id: string;
+  sampleId: string; // Biological sample identifier (e.g. "S1", "S2", "INF-A")
+  name: string;
+  inputMode?: PoInputMode;
+  directRate?: string;
+  readings: Record<number, string>;
+  linearRegionStart?: number;
+  linearRegionEnd?: number;
+}
+
+// Unified Sample Row for Dual-Assay Estimation on the same page (optional legacy support)
+export interface DualAssaySampleRow {
+  id: string;
+  sampleId: string; // e.g. "S1", "S2", "INF-A"
+  name: string;     // e.g. "Commercial Infusion A"
+  // Coagulation endpoint inputs
+  coagAbs: string;
+  coagReplicates?: string;
+  coagDilutionFactor?: string;
+  // Phenoloxidase kinetic inputs
+  poInputMode?: PoInputMode;
+  poDirectRate?: string;
+  poReadings: Record<number, string>;
+}
+
 export interface KineticSampleRow {
   id: string;
   sampleId: string; // Stable biological sample identifier

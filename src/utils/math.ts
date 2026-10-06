@@ -906,6 +906,9 @@ export function computeKineticRates(
         ? parseFloat(row.standardEu)
         : undefined;
 
+    const sampleDisplayName =
+      row.name.trim() || (row.sampleId ? row.sampleId.trim() : '') || 'Unnamed Sample';
+
     // MODE 1: Direct Pre-calculated Rate
     if (mode === 'direct_rate') {
       const rateVal =
@@ -913,7 +916,7 @@ export function computeKineticRates(
           ? parseFloat(row.directRate)
           : NaN;
 
-      const isValid = Number.isFinite(rateVal) && Boolean(row.name.trim());
+      const isValid = Number.isFinite(rateVal) && Boolean(row.name.trim() || row.sampleId?.trim());
       const activityLevel: 'baseline' | 'active' | 'high' =
         rateVal >= 0.01
           ? 'high'
@@ -939,7 +942,7 @@ export function computeKineticRates(
         id,
         sampleId,
         runId,
-        name: row.name.trim() || 'Unnamed Sample',
+        name: sampleDisplayName,
         type: row.type,
         inputMode: 'direct_rate',
         standardEu: stdEuNum,
@@ -983,12 +986,12 @@ export function computeKineticRates(
       }
     });
 
-    if (validPairs.length < 2 || !row.name.trim()) {
+    if (validPairs.length < 2 || (!row.name.trim() && !row.sampleId?.trim())) {
       return {
         id,
         sampleId,
         runId,
-        name: row.name.trim() || 'Unnamed Sample',
+        name: sampleDisplayName,
         type: row.type,
         inputMode: 'series',
         standardEu: stdEuNum,
@@ -1035,7 +1038,7 @@ export function computeKineticRates(
       id,
       sampleId,
       runId,
-      name: row.name.trim(),
+      name: sampleDisplayName,
       type: row.type,
       inputMode: 'series',
       standardEu: stdEuNum,

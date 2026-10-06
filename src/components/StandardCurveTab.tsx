@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   TrendingDown,
+  TrendingUp,
   Info,
   RotateCcw,
   Award,
@@ -29,6 +30,7 @@ interface StandardCurveTabProps {
   onClear: () => void;
   runLabel: string;
   onLoadExample?: () => void;
+  errorMessage?: string | null;
 }
 
 export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
@@ -43,6 +45,7 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
   onClear,
   runLabel,
   onLoadExample,
+  errorMessage,
 }) => {
   const [showAnovaDetails, setShowAnovaDetails] = useState(false);
 
@@ -170,6 +173,9 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
                             onChange={(e) =>
                               handleRowChange(row.id, 'eu', e.target.value)
                             }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') onCompute();
+                            }}
                             className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 font-mono text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                           />
                         </td>
@@ -182,6 +188,9 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
                             onChange={(e) =>
                               handleRowChange(row.id, 'abs', e.target.value)
                             }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') onCompute();
+                            }}
                             className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 font-mono text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                           />
                         </td>
@@ -197,6 +206,9 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
                                 e.target.value
                               )
                             }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') onCompute();
+                            }}
                             className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 font-mono text-xs text-slate-900 dark:text-slate-100 px-2 py-1.5 rounded-md outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                           />
                         </td>
@@ -214,6 +226,24 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
                   </tbody>
                 </table>
               </div>
+
+              {/* Validation / Submission Error Banner */}
+              {errorMessage && (
+                <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-800 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>{errorMessage}</span>
+                  </div>
+                  {onLoadExample && (
+                    <button
+                      onClick={onLoadExample}
+                      className="px-2.5 py-1 font-bold text-xs bg-white dark:bg-slate-800 rounded border border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40 text-amber-900 dark:text-amber-200 transition cursor-pointer self-start sm:self-auto shrink-0"
+                    >
+                      Load Example Standards
+                    </button>
+                  )}
+                </div>
+              )}
 
               <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
@@ -240,9 +270,12 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
                   </button>
                   <button
                     onClick={onCompute}
-                    className="px-3.5 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs cursor-pointer ml-auto"
+                    id="btn-compute-calibration"
+                    className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs cursor-pointer ml-auto flex items-center gap-1.5"
+                    title="Fit calibration curve from standard levels (or press Enter)"
                   >
-                    Compute Curve
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    Compute Calibration Curve
                   </button>
                 </div>
 

@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import {
   CalibrationRow,
-  SampleRow,
   CalibrationModelFit,
+  SampleRow,
+  PoSampleRow,
   SampleEstimateResult,
+  PoStandardRow,
   KineticSampleRow,
   KineticResult,
   KineticCalibrationModel,
@@ -21,8 +23,8 @@ import { formatCoagulationCsv, formatKineticCsv, formatComparisonCsv } from './u
 import { DETERMINISTIC_STUDY_FIXTURE } from './data/studyFixtures';
 import { Header } from './components/Header';
 import { StandardCurveTab } from './components/StandardCurveTab';
+import { PhenoloxidaseCurveTab } from './components/PhenoloxidaseCurveTab';
 import { SampleEstimatorTab } from './components/SampleEstimatorTab';
-import { PhenoloxidaseTab } from './components/PhenoloxidaseTab';
 import { DualAssayComparisonSection } from './components/DualAssayComparisonSection';
 import { ValidationReportTab } from './components/ValidationReportTab';
 import { LabManualModal } from './components/LabManualModal';
@@ -37,12 +39,6 @@ const EMPTY_CAL_ROWS: CalibrationRow[] = [
   { id: '4', eu: '', abs: '', replicates: '' },
 ];
 
-const EMPTY_SAMPLE_ROWS: SampleRow[] = [
-  { id: 's1', sampleId: 'S1', name: '', abs: '', replicates: '', dilutionFactor: '1' },
-  { id: 's2', sampleId: 'S2', name: '', abs: '', replicates: '', dilutionFactor: '1' },
-  { id: 's3', sampleId: 'S3', name: '', abs: '', replicates: '', dilutionFactor: '1' },
-];
-
 const EXAMPLE_CAL_ROWS: CalibrationRow[] = [
   { id: '1', eu: '0', abs: '0.005', replicates: '' },
   { id: '2', eu: '0.5', abs: '0.048', replicates: '0.047, 0.049' },
@@ -50,80 +46,88 @@ const EXAMPLE_CAL_ROWS: CalibrationRow[] = [
   { id: '4', eu: '5.0', abs: '0.452', replicates: '0.450, 0.454' },
 ];
 
-const EXAMPLE_SAMPLE_ROWS: SampleRow[] = [
-  { id: 's1', sampleId: 'S1', name: 'Commercial Infusion A', abs: '0.082', replicates: '0.081, 0.083', dilutionFactor: '1' },
-  { id: 's2', sampleId: 'S2', name: 'Sterile Water Control', abs: '0.008', replicates: '', dilutionFactor: '1' },
-  { id: 's3', sampleId: 'S3', name: 'Commercial Infusion B', abs: '0.310', replicates: '0.308, 0.312', dilutionFactor: '1' },
-];
-
 const DEFAULT_TIME_POINTS = [0, 2, 4, 6, 8, 10];
 
-const EMPTY_KINETIC_ROWS: KineticSampleRow[] = [
-  { id: 'k1', sampleId: 'STD0', name: '', type: 'standard', standardEu: '0.0', readings: {} },
-  { id: 'k2', sampleId: 'STD1', name: '', type: 'standard', standardEu: '1.0', readings: {} },
-  { id: 'k3', sampleId: 'S1', name: '', type: 'sample', readings: {} },
+// Standalone PO Standards (Standards only — NO sampleId needed!)
+const EMPTY_PO_STANDARD_ROWS: PoStandardRow[] = [
+  { id: 'po_std_0', standardEu: '0.0', name: 'Calibrator Blank (0.0 EU)', readings: {} },
+  { id: 'po_std_1', standardEu: '0.5', name: 'Standard 0.5 EU/mL', readings: {} },
+  { id: 'po_std_2', standardEu: '2.0', name: 'Standard 2.0 EU/mL', readings: {} },
+  { id: 'po_std_3', standardEu: '5.0', name: 'Standard 5.0 EU/mL', readings: {} },
 ];
 
-const EXAMPLE_KINETIC_ROWS: KineticSampleRow[] = [
+const EXAMPLE_PO_STANDARD_ROWS: PoStandardRow[] = [
   {
-    id: 'k_std0',
-    sampleId: 'STD0',
-    name: 'Standard Blank 0.0 EU',
-    type: 'standard',
+    id: 'po_std_0',
     standardEu: '0.0',
+    name: 'Calibrator Blank (0.0 EU)',
     readings: { 0: '0.010', 2: '0.011', 4: '0.011', 6: '0.012', 8: '0.012', 10: '0.013' },
   },
   {
-    id: 'k_std1',
-    sampleId: 'STD1',
-    name: 'Standard 0.5 EU/mL',
-    type: 'standard',
+    id: 'po_std_1',
     standardEu: '0.5',
+    name: 'Standard 0.5 EU/mL',
     readings: { 0: '0.020', 2: '0.027', 4: '0.035', 6: '0.043', 8: '0.050', 10: '0.058' },
   },
   {
-    id: 'k_std2',
-    sampleId: 'STD2',
-    name: 'Standard 2.0 EU/mL',
-    type: 'standard',
+    id: 'po_std_2',
     standardEu: '2.0',
+    name: 'Standard 2.0 EU/mL',
     readings: { 0: '0.030', 2: '0.058', 4: '0.086', 6: '0.114', 8: '0.142', 10: '0.170' },
   },
   {
-    id: 'k_std3',
-    sampleId: 'STD3',
-    name: 'Standard 5.0 EU/mL',
-    type: 'standard',
+    id: 'po_std_3',
     standardEu: '5.0',
+    name: 'Standard 5.0 EU/mL',
     readings: { 0: '0.045', 2: '0.115', 4: '0.185', 6: '0.255', 8: '0.325', 10: '0.395' },
   },
+];
+
+// Table 1: Independent Coagulation Unknown Samples
+const EMPTY_COAG_SAMPLE_ROWS: SampleRow[] = [
+  { id: 'c1', sampleId: 'S1', name: '', abs: '', replicates: '', dilutionFactor: '1' },
+  { id: 'c2', sampleId: 'S2', name: '', abs: '', replicates: '', dilutionFactor: '1' },
+  { id: 'c3', sampleId: 'S3', name: '', abs: '', replicates: '', dilutionFactor: '1' },
+];
+
+const EXAMPLE_COAG_SAMPLE_ROWS: SampleRow[] = [
+  { id: 'c1', sampleId: 'S1', name: 'Commercial Infusion A', abs: '0.082', replicates: '0.081, 0.083', dilutionFactor: '1' },
+  { id: 'c2', sampleId: 'S2', name: 'Sterile Water Control', abs: '0.008', replicates: '', dilutionFactor: '1' },
+  { id: 'c3', sampleId: 'S3', name: 'Commercial Infusion B', abs: '0.310', replicates: '0.308, 0.312', dilutionFactor: '1' },
+];
+
+// Table 2: Independent Phenoloxidase Unknown Samples
+const EMPTY_PO_SAMPLE_ROWS: PoSampleRow[] = [
+  { id: 'p1', sampleId: 'S1', name: '', readings: {} },
+  { id: 'p2', sampleId: 'S2', name: '', readings: {} },
+  { id: 'p3', sampleId: 'S3', name: '', readings: {} },
+];
+
+const EXAMPLE_PO_SAMPLE_ROWS: PoSampleRow[] = [
   {
-    id: 'k_s1',
+    id: 'p1',
     sampleId: 'S1',
     name: 'Commercial Infusion A',
-    type: 'sample',
     readings: { 0: '0.025', 2: '0.038', 4: '0.052', 6: '0.065', 8: '0.078', 10: '0.091' },
   },
   {
-    id: 'k_s2',
+    id: 'p2',
     sampleId: 'S2',
     name: 'Sterile Water Control',
-    type: 'sample',
     readings: { 0: '0.010', 2: '0.011', 4: '0.010', 6: '0.012', 8: '0.011', 10: '0.013' },
   },
   {
-    id: 'k_s3',
+    id: 'p3',
     sampleId: 'S3',
     name: 'Commercial Infusion B',
-    type: 'sample',
     readings: { 0: '0.035', 2: '0.089', 4: '0.143', 6: '0.197', 8: '0.251', 10: '0.305' },
   },
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'cal' | 'est' | 'po' | 'cmp' | 'rep'>('cal');
+  const [activeTab, setActiveTab] = useState<'cal' | 'po' | 'est' | 'cmp' | 'rep'>('cal');
   const [runLabel, setRunLabel] = useState('Run 1');
-  const [model, setModel] = useState<string>('linear');
+  const [model, setModel] = useState<'linear' | 'quadratic'>('linear');
   const [threshold, setThreshold] = useState<number>(0.5);
 
   // Wavelength Settings
@@ -132,45 +136,43 @@ export default function App() {
     phenoloxidase: 490,
   });
 
-  // Calibration rows (Coagulation)
+  // Coagulation Calibration
   const [calRows, setCalRows] = useState<CalibrationRow[]>(EMPTY_CAL_ROWS);
-  const [sampleRows, setSampleRows] = useState<SampleRow[]>(EMPTY_SAMPLE_ROWS);
   const [calibration, setCalibration] = useState<CalibrationModelFit | null>(null);
-  const [sampleResults, setSampleResults] = useState<SampleEstimateResult[]>([]);
+  const [coagCurveError, setCoagCurveError] = useState<string | null>(null);
 
-  // Phenoloxidase kinetic state
+  // Phenoloxidase Calibration (Standalone)
   const [timePoints, setTimePoints] = useState<number[]>(DEFAULT_TIME_POINTS);
-  const [kineticRows, setKineticRows] = useState<KineticSampleRow[]>(EMPTY_KINETIC_ROWS);
-  const [kineticResults, setKineticResults] = useState<KineticResult[]>([]);
+  const [poStandardRows, setPoStandardRows] = useState<PoStandardRow[]>(EMPTY_PO_STANDARD_ROWS);
+  const [poStandardResults, setPoStandardResults] = useState<KineticResult[]>([]);
   const [kineticModel, setKineticModel] = useState<KineticCalibrationModel | null>(null);
+  const [poCurveError, setPoCurveError] = useState<string | null>(null);
 
-  // Cross-Assay Concordance comparison items
+  // Two Independent Tables for Unknown Samples
+  const [coagRows, setCoagRows] = useState<SampleRow[]>(EMPTY_COAG_SAMPLE_ROWS);
+  const [poRows, setPoRows] = useState<PoSampleRow[]>(EMPTY_PO_SAMPLE_ROWS);
+  const [estimateError, setEstimateError] = useState<string | null>(null);
+
+  // Estimation Results
+  const [sampleResults, setSampleResults] = useState<SampleEstimateResult[]>([]);
+  const [kineticResults, setKineticResults] = useState<KineticResult[]>([]);
+
+  // Cross-Assay Matched Pairs (sharing Sample ID)
   const [comparisons, setComparisons] = useState<AssayComparisonItem[]>([]);
 
-  // Modals state
+  // UI Modals
   const [isLabManualOpen, setIsLabManualOpen] = useState(false);
-  const [activeFaviconId, setActiveFaviconId] = useState<string>('bio-flask');
 
-  // Dark & Light theme state
-  const { preference: themePreference, isDark, toggleTheme } = useTheme();
+  // Theme Hook
+  const { preference, isDark, toggleTheme } = useTheme();
 
-  // Load saved custom or selected favicon on startup
   useEffect(() => {
     try {
-      const savedCustom = localStorage.getItem('endotoxin_custom_favicon');
-      const savedId = localStorage.getItem('endotoxin_active_favicon_id');
-      if (savedCustom && savedId === 'custom') {
-        applyFaviconToDocument(savedCustom);
-        setActiveFaviconId('custom');
-      } else if (savedId) {
-        const item = FAVICON_COLLECTION.find((f) => f.id === savedId);
-        if (item) {
-          applyFaviconToDocument(item.svg);
-          setActiveFaviconId(savedId);
-        }
+      if (FAVICON_COLLECTION[0]) {
+        applyFaviconToDocument(FAVICON_COLLECTION[0].svg);
       }
     } catch {
-      // storage exception safe
+      // safe
     }
   }, []);
 
@@ -190,8 +192,8 @@ export default function App() {
     const meta: any[] = [];
 
     calRows.forEach((row) => {
-      const x = parseFloat(row.eu);
-      const meanAbs = parseFloat(row.abs);
+      const x = parseFloat(row.eu.replace(',', '.'));
+      const meanAbs = parseFloat(row.abs.replace(',', '.'));
       if (!Number.isFinite(x) || !Number.isFinite(meanAbs)) return;
 
       const summary = summarizeReplicates(meanAbs, row.replicates);
@@ -209,179 +211,251 @@ export default function App() {
     });
 
     if (pts.length < 2) {
-      alert('Please enter at least two calibration points with valid EU/mL and absorbance values.');
+      setCoagCurveError('Please enter at least 2 valid calibration points with EU/mL and absorbance values.');
       return;
     }
 
-    const uniqueEU = new Set(pts.map((p) => p[0]));
-    if (uniqueEU.size < 2) {
-      alert('Calibration requires at least two distinct concentration standards.');
-      return;
-    }
-
+    setCoagCurveError(null);
     const fit = chooseModel(pts, model);
-    if (!fit.isValidCalibration) {
-      alert(`Calibration rejected: ${fit.validationErrors?.join('; ') || 'Invalid calibration curve.'}`);
-      return;
-    }
-
-    const xMin = Math.min(...pts.map((p) => p[0]));
-    const xMax = Math.max(...pts.map((p) => p[0]));
-
-    const newCalibration: CalibrationModelFit = {
+    const xVals = pts.map((p) => p[0]);
+    const newCal: CalibrationModelFit = {
       ...fit,
-      model: fit.type,
+      model,
       requestedModel: model,
       points: pts,
       meta,
-      xMin,
-      xMax,
+      xMin: Math.min(...xVals),
+      xMax: Math.max(...xVals),
     };
 
-    setCalibration(newCalibration);
+    setCalibration(newCal);
   };
 
-  // Compute sample estimates whenever calibration or samples change
-  const handleEstimateSamples = () => {
-    if (!calibration) {
-      alert('Please compute the calibration curve first.');
+  // Compute Phenoloxidase Standalone Standard Curve
+  const handleComputePoCurve = () => {
+    const stdRows: KineticSampleRow[] = poStandardRows
+      .filter((r) => r.standardEu.trim() !== '' && Number.isFinite(parseFloat(r.standardEu.replace(',', '.'))))
+      .map((r, idx) => {
+        const hasDirect = r.directRate !== undefined && r.directRate.trim() !== '';
+        return {
+          id: r.id,
+          sampleId: `STD_${idx + 1}`,
+          name: r.name || `Standard ${r.standardEu} EU/mL`,
+          type: 'standard',
+          inputMode: hasDirect ? 'direct_rate' : (r.inputMode || 'series'),
+          standardEu: r.standardEu,
+          directRate: r.directRate,
+          readings: r.readings || {},
+        };
+      });
+
+    if (stdRows.length < 2) {
+      setPoCurveError('Please enter at least 2 valid standard calibrator levels (EU/mL).');
       return;
     }
 
-    const validSamples: {
-      id?: string;
-      sampleId?: string;
-      name: string;
-      abs: number;
-      sd: number;
-      cv: number;
-      n: number;
-      replicates: number[];
-      dilutionFactor?: number;
-    }[] = [];
+    const { results, model: fittedModel } = computeKineticRates(timePoints, stdRows, threshold, runLabel);
+    const validStandards = results.filter((r) => r.type === 'standard' && r.valid);
 
-    sampleRows.forEach((row, idx) => {
-      const meanAbs = parseFloat(row.abs);
-      if (!row.name.trim() || !Number.isFinite(meanAbs)) return;
+    if (validStandards.length < 2 || !fittedModel) {
+      setPoCurveError(
+        'Insufficient standard data: Enter time-course absorbance readings for at least 2 time points per standard (or enter direct velocity dA/min) for at least 2 standard levels.'
+      );
+      return;
+    }
 
-      const summary = summarizeReplicates(meanAbs, row.replicates);
-      if (Number.isFinite(summary.mean)) {
-        validSamples.push({
+    setPoCurveError(null);
+    setPoStandardResults(validStandards);
+    setKineticModel(fittedModel);
+  };
+
+  // Estimate Coagulation Samples Only
+  const handleEstimateCoag = () => {
+    if (!calibration) {
+      setEstimateError('Please compute the Coagulation calibration curve first.');
+      return;
+    }
+
+    const validCoag = coagRows
+      .filter((r) => r.name.trim() !== '' || (r.sampleId && r.sampleId.trim() !== ''))
+      .map((row, idx) => {
+        const meanAbs = parseFloat(row.abs.replace(',', '.'));
+        if (!Number.isFinite(meanAbs)) return null;
+        const summary = summarizeReplicates(meanAbs, row.replicates);
+        if (!Number.isFinite(summary.mean)) return null;
+        return {
           id: row.id,
           sampleId: row.sampleId || `S${idx + 1}`,
-          name: row.name.trim(),
+          name: row.name.trim() || row.sampleId || `Sample ${idx + 1}`,
           abs: summary.mean,
           sd: summary.sd,
           cv: summary.cv,
           n: summary.n,
           replicates: summary.values,
-          dilutionFactor: row.dilutionFactor ? parseFloat(row.dilutionFactor) : 1,
-        });
-      }
-    });
+          dilutionFactor: row.dilutionFactor ? parseFloat(row.dilutionFactor.replace(',', '.')) : 1,
+        };
+      })
+      .filter((v): v is NonNullable<typeof v> => v !== null);
 
-    if (validSamples.length === 0) {
-      alert('Please enter at least one sample with a name and absorbance value.');
+    if (validCoag.length > 0) {
+      setEstimateError(null);
+      setSampleResults(computeSampleEstimates(calibration, validCoag, threshold, runLabel));
+    } else {
+      setSampleResults([]);
+      setEstimateError('No valid coagulation samples found. Please enter absorbance values.');
+    }
+  };
+
+  // Estimate Phenoloxidase Samples Only
+  const handleEstimatePo = () => {
+    if (!kineticModel) {
+      setEstimateError('Please compute the Phenoloxidase kinetic calibration curve first.');
       return;
     }
 
-    const estimates = computeSampleEstimates(calibration, validSamples, threshold, runLabel);
-    setSampleResults(estimates);
+    const stdRows: KineticSampleRow[] = poStandardRows
+      .filter((r) => r.standardEu.trim() !== '' && Number.isFinite(parseFloat(r.standardEu.replace(',', '.'))))
+      .map((r, idx) => {
+        const hasDirect = r.directRate !== undefined && r.directRate.trim() !== '';
+        return {
+          id: r.id,
+          sampleId: `STD_${idx + 1}`,
+          name: r.name || `Standard ${r.standardEu} EU/mL`,
+          type: 'standard',
+          inputMode: hasDirect ? 'direct_rate' : (r.inputMode || 'series'),
+          standardEu: r.standardEu,
+          directRate: r.directRate,
+          readings: r.readings || {},
+        };
+      });
+
+    const smpRows: KineticSampleRow[] = poRows
+      .filter((r) => r.name.trim() !== '' || (r.sampleId && r.sampleId.trim() !== ''))
+      .map((r, idx) => {
+        const hasDirect = r.directRate !== undefined && r.directRate.trim() !== '';
+        return {
+          id: r.id,
+          sampleId: (r.sampleId && r.sampleId.trim()) || `S${idx + 1}`,
+          name: r.name.trim() || r.sampleId || `Sample ${idx + 1}`,
+          type: 'sample' as const,
+          inputMode: hasDirect ? 'direct_rate' : (r.inputMode || 'series'),
+          directRate: r.directRate,
+          readings: r.readings || {},
+        };
+      });
+
+    if (smpRows.length === 0) {
+      setKineticResults([]);
+      setEstimateError('No valid phenoloxidase samples found. Please enter sample readings or direct rates.');
+      return;
+    }
+
+    const { results } = computeKineticRates(timePoints, [...stdRows, ...smpRows], threshold, runLabel);
+    const validSamples = results.filter((r) => r.type === 'sample');
+
+    // Ensure estimatedEu is calculated using the active kineticModel
+    if (kineticModel && kineticModel.slope > 0) {
+      validSamples.forEach((res) => {
+        if (res.valid && res.estimatedEu === undefined && Number.isFinite(res.rate)) {
+          const rawEst = (res.rate - kineticModel.intercept) / kineticModel.slope;
+          res.estimatedEu = rawEst;
+          res.reportedEu = rawEst;
+          res.reportableText = `${rawEst.toFixed(3)} EU/mL`;
+          const isAbove = rawEst > threshold;
+          res.compliance = isAbove ? 'FLAGGED' : 'PASS';
+          res.status = isAbove ? 'FLAGGED' : 'PASS';
+        }
+      });
+    }
+
+    setEstimateError(null);
+    setKineticResults(validSamples);
   };
 
-  // Keep estimates updated whenever calibration, sampleRows, threshold, or runLabel changes
-  useEffect(() => {
+  // Master Estimate: Estimate Both Independent Tables
+  const handleEstimateAll = () => {
+    if (!calibration && !kineticModel) {
+      setEstimateError('Please compute at least one calibration curve (Coagulation Curve or PO Kinetic Curve) before estimating samples.');
+      return;
+    }
+    setEstimateError(null);
     if (calibration) {
-      const validSamples = sampleRows
-        .map((row, idx) => {
-          const meanAbs = parseFloat(row.abs);
-          if (!row.name.trim() || !Number.isFinite(meanAbs)) return null;
-          const summary = summarizeReplicates(meanAbs, row.replicates);
-          if (!Number.isFinite(summary.mean)) return null;
-          return {
-            id: row.id,
-            sampleId: row.sampleId || `S${idx + 1}`,
-            name: row.name.trim(),
-            abs: summary.mean,
-            sd: summary.sd,
-            cv: summary.cv,
-            n: summary.n,
-            replicates: summary.values,
-            dilutionFactor: row.dilutionFactor ? parseFloat(row.dilutionFactor) : 1,
-          };
-        })
-        .filter((v): v is NonNullable<typeof v> => v !== null);
-
-      if (validSamples.length > 0) {
-        setSampleResults(computeSampleEstimates(calibration, validSamples, threshold, runLabel));
-      } else {
-        setSampleResults([]);
-      }
+      handleEstimateCoag();
     }
-  }, [calibration, sampleRows, threshold, runLabel]);
-
-  // Compute Phenoloxidase Kinetic Rates & Standard Curve
-  const handleComputeKinetics = () => {
-    const validRows = kineticRows.filter((r) => r.name.trim() !== '');
-    if (validRows.length === 0) {
-      alert('Please enter at least one fraction/sample name and absorbance time readings.');
-      return;
+    if (kineticModel) {
+      handleEstimatePo();
     }
-
-    const { results, model: fittedModel } = computeKineticRates(timePoints, validRows, threshold, runLabel);
-    const validCount = results.filter((r) => r.valid).length;
-    if (validCount === 0) {
-      alert('Could not compute kinetics: Please ensure at least 2 time points have valid numerical absorbance readings.');
-      return;
-    }
-
-    setKineticResults(results);
-    setKineticModel(fittedModel);
   };
 
+  // Clear Handlers
   const handleClearCal = () => {
     setCalRows(EMPTY_CAL_ROWS);
     setCalibration(null);
+    setCoagCurveError(null);
   };
 
-  const handleLoadExampleCal = () => {
-    setCalRows(EXAMPLE_CAL_ROWS);
+  const handleClearPoCurve = () => {
+    setPoStandardRows(EMPTY_PO_STANDARD_ROWS);
+    setPoStandardResults([]);
+    setKineticModel(null);
+    setPoCurveError(null);
   };
 
   const handleClearSamples = () => {
-    setSampleRows(EMPTY_SAMPLE_ROWS);
+    setCoagRows(EMPTY_COAG_SAMPLE_ROWS);
+    setPoRows(EMPTY_PO_SAMPLE_ROWS);
     setSampleResults([]);
+    setKineticResults([]);
+    setComparisons([]);
+    setEstimateError(null);
+  };
+
+  // Example Loaders
+  const handleLoadExampleCal = () => {
+    setCalRows(EXAMPLE_CAL_ROWS);
+    setCoagCurveError(null);
+  };
+
+  const handleLoadExamplePoCurve = () => {
+    setTimePoints(DEFAULT_TIME_POINTS);
+    setPoStandardRows(EXAMPLE_PO_STANDARD_ROWS);
+    setPoCurveError(null);
+    const stdRows: KineticSampleRow[] = EXAMPLE_PO_STANDARD_ROWS.map((r, idx) => ({
+      id: r.id,
+      sampleId: `STD_${idx + 1}`,
+      name: r.name || `Standard ${r.standardEu} EU/mL`,
+      type: 'standard',
+      standardEu: r.standardEu,
+      readings: r.readings,
+    }));
+    const { results, model: fittedModel } = computeKineticRates(DEFAULT_TIME_POINTS, stdRows);
+    setPoStandardResults(results.filter((r) => r.type === 'standard'));
+    setKineticModel(fittedModel);
   };
 
   const handleLoadExampleSamples = () => {
-    setSampleRows(EXAMPLE_SAMPLE_ROWS);
-  };
-
-  const handleClearKinetics = () => {
-    setKineticRows(EMPTY_KINETIC_ROWS);
-    setKineticResults([]);
-    setKineticModel(null);
-  };
-
-  const handleLoadExampleKinetics = () => {
-    setTimePoints(DEFAULT_TIME_POINTS);
-    setKineticRows(EXAMPLE_KINETIC_ROWS);
-    const { results, model: fittedModel } = computeKineticRates(
-      DEFAULT_TIME_POINTS,
-      EXAMPLE_KINETIC_ROWS
-    );
-    setKineticResults(results);
-    setKineticModel(fittedModel);
+    setCoagRows(EXAMPLE_COAG_SAMPLE_ROWS);
+    setPoRows(EXAMPLE_PO_SAMPLE_ROWS);
   };
 
   // One-click dual-assay study loader (deterministic, synchronous, zero-delay)
   const handleLoadFullDualAssayStudy = () => {
     const fixture = DETERMINISTIC_STUDY_FIXTURE;
     setCalRows(fixture.calRows);
-    setSampleRows(fixture.sampleRows);
     setTimePoints(fixture.timePoints);
-    setKineticRows(fixture.kineticRows);
 
+    // 1. PO Standards
+    const poStds: PoStandardRow[] = fixture.kineticRows
+      .filter((r) => r.type === 'standard')
+      .map((r) => ({
+        id: r.id,
+        standardEu: r.standardEu || '0.0',
+        name: r.name,
+        readings: r.readings,
+      }));
+    setPoStandardRows(poStds);
+
+    // 2. Coagulation Curve Fit
     const fit = chooseModel(fixture.calibrationPoints, 'linear');
     const newCal: CalibrationModelFit = {
       ...fit,
@@ -394,6 +468,34 @@ export default function App() {
     };
     setCalibration(newCal);
 
+    // 3. PO Curve Fit
+    const stdKinRows: KineticSampleRow[] = fixture.kineticRows.filter((r) => r.type === 'standard');
+    const { results: stdKResults, model: fittedModel } = computeKineticRates(
+      fixture.timePoints,
+      stdKinRows,
+      threshold,
+      runLabel
+    );
+    setPoStandardResults(stdKResults);
+    setKineticModel(fittedModel);
+
+    // 4. Coagulation Samples
+    setCoagRows(fixture.sampleRows);
+
+    // 5. Phenoloxidase Samples
+    const poSmpRows: PoSampleRow[] = fixture.kineticRows
+      .filter((r) => r.type === 'sample')
+      .map((r) => ({
+        id: r.id,
+        sampleId: r.sampleId,
+        name: r.name,
+        inputMode: r.inputMode,
+        directRate: r.directRate,
+        readings: r.readings,
+      }));
+    setPoRows(poSmpRows);
+
+    // 6. Coagulation Estimates
     const validSamples = fixture.sampleRows.map((r, idx) => {
       const absVal = parseFloat(r.abs);
       const summary = summarizeReplicates(absVal, r.replicates);
@@ -409,22 +511,22 @@ export default function App() {
         dilutionFactor: parseFloat(r.dilutionFactor || '1'),
       };
     });
-
     const sampEstimates = computeSampleEstimates(newCal, validSamples, threshold, runLabel);
     setSampleResults(sampEstimates);
 
-    const { results: kResults, model: fittedModel } = computeKineticRates(
+    // 7. PO Estimates
+    const { results: allKResults } = computeKineticRates(
       fixture.timePoints,
       fixture.kineticRows,
       threshold,
       runLabel
     );
-    setKineticResults(kResults);
-    setKineticModel(fittedModel);
+    setKineticResults(allKResults.filter((r) => r.type === 'sample'));
   };
 
+  // CSV Downloads
   const handleDownloadCsv = () => {
-    if (!sampleResults.length) {
+    if (!sampleResults.length && !kineticResults.length) {
       alert('Please estimate sample concentrations first.');
       return;
     }
@@ -511,30 +613,26 @@ export default function App() {
         setWavelengths={setWavelengths}
         onGoToReport={() => setActiveTab('rep')}
         onOpenLabManual={() => setIsLabManualOpen(true)}
-        themePreference={themePreference}
+        themePreference={preference}
         isDark={isDark}
         onToggleTheme={toggleTheme}
       />
 
-      <div className="flex-1 max-w-[1180px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Page Title Header & Global Quick Actions */}
-        <div className="no-print flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-widest text-indigo-600 dark:text-indigo-400 font-bold mb-0.5">
-              Hemolymph Endotoxin Assay Suite
-            </p>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-              Endotoxin Assay Calibration &amp; Dual-Assay Validation
-            </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              <em>Archachatina marginata</em> calibration, commercial fluid estimation, phenoloxidase kinetics &amp; orthogonal concordance.
-            </p>
+      {/* Main Container */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+        {/* Quick Action Fixture Banner */}
+        <div className="bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs no-print">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-indigo-950 dark:text-indigo-200 uppercase tracking-tight">
+              Rapid Study Benchmark:
+            </span>
+            <span className="text-slate-600 dark:text-slate-300">
+              Deterministic CLSI EP09-A3 study fixture (Coagulation &amp; Phenoloxidase).
+            </span>
           </div>
-
           <button
             onClick={handleLoadFullDualAssayStudy}
-            className="px-3.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded-lg transition shadow-2xs self-start sm:self-auto cursor-pointer"
-            title="Populate complete dual-assay dataset across Coagulation and Phenoloxidase for immediate comparison"
+            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition shadow-2xs cursor-pointer shrink-0"
           >
             Load Full Dual-Assay Study
           </button>
@@ -553,16 +651,6 @@ export default function App() {
             1. Coagulation Curve
           </button>
           <button
-            onClick={() => setActiveTab('est')}
-            className={`pb-2.5 px-1 border-b-2 transition cursor-pointer whitespace-nowrap ${
-              activeTab === 'est'
-                ? 'border-indigo-600 dark:border-indigo-500 text-slate-900 dark:text-slate-100 font-bold'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            2. Coagulation Estimator
-          </button>
-          <button
             onClick={() => setActiveTab('po')}
             className={`pb-2.5 px-1 border-b-2 transition cursor-pointer whitespace-nowrap ${
               activeTab === 'po'
@@ -570,7 +658,17 @@ export default function App() {
                 : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            3. PO Kinetics &amp; EU/mL
+            2. PO Kinetic Curve
+          </button>
+          <button
+            onClick={() => setActiveTab('est')}
+            className={`pb-2.5 px-1 border-b-2 transition cursor-pointer whitespace-nowrap ${
+              activeTab === 'est'
+                ? 'border-indigo-600 dark:border-indigo-500 text-slate-900 dark:text-slate-100 font-bold'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            3. Sample Estimator
           </button>
           <button
             onClick={() => setActiveTab('cmp')}
@@ -609,7 +707,7 @@ export default function App() {
                 rows={calRows}
                 setRows={setCalRows}
                 model={model}
-                setModel={setModel}
+                setModel={(m) => setModel(m as 'linear' | 'quadratic')}
                 calibration={calibration}
                 coagWavelength={wavelengths.coagulation}
                 setCoagWavelength={(w) =>
@@ -619,43 +717,57 @@ export default function App() {
                 onClear={handleClearCal}
                 runLabel={runLabel}
                 onLoadExample={handleLoadExampleCal}
+                errorMessage={coagCurveError}
+              />
+            )}
+
+            {activeTab === 'po' && (
+              <PhenoloxidaseCurveTab
+                timePoints={timePoints}
+                setTimePoints={setTimePoints}
+                rows={poStandardRows}
+                setRows={setPoStandardRows}
+                model={kineticModel}
+                standardResults={poStandardResults}
+                poWavelength={wavelengths.phenoloxidase}
+                setPoWavelength={(w) =>
+                  setWavelengths((prev) => ({ ...prev, phenoloxidase: w }))
+                }
+                onCompute={handleComputePoCurve}
+                onClear={handleClearPoCurve}
+                onLoadExample={handleLoadExamplePoCurve}
+                onDownloadCsv={handleDownloadKineticCsv}
+                onGoToEstimator={() => setActiveTab('est')}
+                errorMessage={poCurveError}
               />
             )}
 
             {activeTab === 'est' && (
               <SampleEstimatorTab
-                rows={sampleRows}
-                setRows={setSampleRows}
+                coagRows={coagRows}
+                setCoagRows={setCoagRows}
+                poRows={poRows}
+                setPoRows={setPoRows}
                 calibration={calibration}
+                kineticModel={kineticModel}
+                timePoints={timePoints}
                 coagWavelength={wavelengths.coagulation}
-                results={sampleResults}
+                poWavelength={wavelengths.phenoloxidase}
+                coagResults={sampleResults}
+                poResults={kineticResults}
+                comparisons={comparisons}
                 threshold={threshold}
                 setThreshold={setThreshold}
-                onEstimate={handleEstimateSamples}
-                onClear={handleClearSamples}
+                onEstimateAll={handleEstimateAll}
+                onEstimateCoag={handleEstimateCoag}
+                onEstimatePo={handleEstimatePo}
+                onClearAll={handleClearSamples}
                 onDownloadCsv={handleDownloadCsv}
                 onLoadExample={handleLoadExampleSamples}
-              />
-            )}
-
-            {activeTab === 'po' && (
-              <PhenoloxidaseTab
-                timePoints={timePoints}
-                setTimePoints={setTimePoints}
-                rows={kineticRows}
-                setRows={setKineticRows}
-                results={kineticResults}
-                model={kineticModel}
-                poWavelength={wavelengths.phenoloxidase}
-                setPoWavelength={(w) =>
-                  setWavelengths((prev) => ({ ...prev, phenoloxidase: w }))
-                }
-                coagResults={sampleResults}
-                onCompute={handleComputeKinetics}
-                onClear={handleClearKinetics}
-                onLoadExample={handleLoadExampleKinetics}
-                onDownloadCsv={handleDownloadKineticCsv}
-                onGoToCompare={() => setActiveTab('cmp')}
+                onGoToConcordance={() => setActiveTab('cmp')}
+                onGoToCoagCurve={() => setActiveTab('cal')}
+                onGoToPoCurve={() => setActiveTab('po')}
+                errorMessage={estimateError}
               />
             )}
 
@@ -687,8 +799,8 @@ export default function App() {
             )}
           </div>
 
-          {/* Print container: In print mode, ALWAYS show the Validation Report cleanly */}
-          <div className="hidden print:block">
+          {/* Dedicated Print View */}
+          <div className="hidden print:block space-y-8">
             <ValidationReportTab
               runLabel={runLabel}
               calibration={calibration}
@@ -702,9 +814,8 @@ export default function App() {
             />
           </div>
         </div>
-      </div>
+      </main>
 
-      {/* Lab Manual & SOP Documentation Modal */}
       <LabManualModal
         isOpen={isLabManualOpen}
         onClose={() => setIsLabManualOpen(false)}
@@ -712,4 +823,3 @@ export default function App() {
     </div>
   );
 }
-
