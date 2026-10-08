@@ -57,7 +57,7 @@ export const KineticCalibrationChart: React.FC<KineticCalibrationChartProps> = (
         y: yLine,
         mode: 'lines',
         type: 'scatter',
-        name: `Fit: v = ${model.slope.toFixed(4)}x + ${model.intercept.toFixed(4)} (R²=${model.r2.toFixed(4)})`,
+        name: `Fit: v = ${model.slope.toFixed(4)}x ${model.intercept >= 0 ? '+' : '-'} ${Math.abs(model.intercept).toFixed(4)} (R²=${model.r2.toFixed(4)})`,
         line: {
           color: isDark ? '#a5b4fc' : '#6366f1',
           width: isPrintView ? 1.5 : 2,

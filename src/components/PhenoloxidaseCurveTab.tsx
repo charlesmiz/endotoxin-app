@@ -4,6 +4,7 @@ import {
   KineticCalibrationModel,
   KineticResult,
   PoInputMode,
+  generateRowId,
 } from '../types';
 import { KineticChart } from './KineticChart';
 import { KineticCalibrationChart } from './KineticCalibrationChart';
@@ -109,13 +110,13 @@ export const PhenoloxidaseCurveTab: React.FC<PhenoloxidaseCurveTabProps> = ({
   };
 
   const handleAddRow = () => {
-    const nextIdx = rows.length + 1;
     setRows((prev) => [
       ...prev,
       {
-        id: 'po_std_' + Date.now().toString().slice(-5),
-        standardEu: nextIdx === 1 ? '0.0' : (nextIdx * 1.0).toFixed(1),
-        name: `Standard ${nextIdx}`,
+        id: generateRowId('po_std_'),
+        standardEu: '',
+        name: '',
+        directRate: '',
         readings: {},
       },
     ]);
@@ -125,9 +126,10 @@ export const PhenoloxidaseCurveTab: React.FC<PhenoloxidaseCurveTabProps> = ({
     if (rows.length <= 1) {
       setRows([
         {
-          id: 'po_std_1',
-          standardEu: '0.0',
-          name: 'Calibrator Blank 0.0 EU',
+          id: generateRowId('po_std_'),
+          standardEu: '',
+          name: '',
+          directRate: '',
           readings: {},
         },
       ]);
@@ -354,7 +356,7 @@ export const PhenoloxidaseCurveTab: React.FC<PhenoloxidaseCurveTabProps> = ({
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') onCompute();
                             }}
-                            placeholder="0.0"
+                            placeholder="EU/mL"
                             className="w-24 text-center px-2 py-1 text-xs font-mono font-bold border border-indigo-200 dark:border-indigo-700 bg-indigo-50/40 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-300 rounded focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
                           />
                         </td>
@@ -567,8 +569,9 @@ export const PhenoloxidaseCurveTab: React.FC<PhenoloxidaseCurveTabProps> = ({
               </div>
 
               <div className="font-mono text-xs font-bold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900 p-2 rounded border border-indigo-100 dark:border-indigo-900/60 text-center">
-                Rate (dA/dt) = {model.slope.toFixed(5)} &times; [EU/mL] + {model.intercept >= 0 ? '+' : ''}
-                {model.intercept.toFixed(5)}
+                {model.intercept >= 0
+                  ? `y = ${model.slope.toFixed(5)} x + ${model.intercept.toFixed(5)}`
+                  : `y = ${model.slope.toFixed(5)} x - ${Math.abs(model.intercept).toFixed(5)}`}
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-300 pt-1">
@@ -588,6 +591,70 @@ export const PhenoloxidaseCurveTab: React.FC<PhenoloxidaseCurveTabProps> = ({
                   <span className="text-slate-400 block text-[10px]">Standard Error:</span>
                   <span className="font-mono font-semibold">{model.stderr !== undefined ? model.stderr.toFixed(5) : '—'}</span>
                 </div>
+              </div>
+
+              {/* Points used in calibration table & count */}
+              <div className="pt-2 border-t border-indigo-100 dark:border-indigo-900/50 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-tight text-[11px]">
+                    Points used in calibration
+                  </span>
+                  <span className="font-mono font-bold text-indigo-700 dark:text-indigo-400 text-[11px]">
+                    {model.points.length} standards used
+                  </span>
+                </div>
+
+                {/* Duplicate EU warnings */}
+                {model.duplicateEuWarnings && model.duplicateEuWarnings.length > 0 && (
+                  <div className="space-y-1">
+                    {model.duplicateEuWarnings.map((warn, i) => (
+                      <div
+                        key={i}
+                        className="flex items-start gap-1.5 p-2 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded text-[11px] text-amber-800 dark:text-amber-200"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                        <span>{warn}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded">
+                  <table className="w-full text-[11px] border-collapse">
+                    <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0 text-slate-600 dark:text-slate-300">
+                      <tr className="border-b border-slate-200 dark:border-slate-800">
+                        <th className="py-1 px-2 text-left font-semibold">Standard (EU/mL)</th>
+                        <th className="py-1 px-2 text-right font-semibold">Rate (OD/min)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono">
+                      {model.points.map(([eu, rate], i) => (
+                        <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                          <td className="py-1 px-2 text-left font-bold text-indigo-900 dark:text-indigo-300">
+                            {eu.toFixed(eu % 1 === 0 ? 1 : 3)}
+                          </td>
+                          <td className="py-1 px-2 text-right text-slate-700 dark:text-slate-300">
+                            {rate.toFixed(4)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Skipped standard rows notice */}
+                {model.skippedRows && model.skippedRows.length > 0 && (
+                  <div className="p-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded text-[11px] text-slate-600 dark:text-slate-400 space-y-0.5">
+                    <div className="font-semibold text-slate-700 dark:text-slate-300 text-[10px] uppercase">
+                      Excluded / Skipped Rows:
+                    </div>
+                    {model.skippedRows.map((msg, i) => (
+                      <div key={i} className="text-amber-700 dark:text-amber-400">
+                        &bull; {msg}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {model.r2 < 0.98 && (

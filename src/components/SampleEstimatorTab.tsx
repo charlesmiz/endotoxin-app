@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   SampleRow,
   PoSampleRow,
@@ -8,8 +8,10 @@ import {
   KineticCalibrationModel,
   AssayComparisonItem,
   PoInputMode,
+  PairingSummary,
+  generateRowId,
 } from '../types';
-import { parseReplicates, mean } from '../utils/math';
+import { parseReplicates, mean, getPairKey, computePairingSummary } from '../utils/math';
 import {
   Plus,
   Trash2,
@@ -38,6 +40,7 @@ interface SampleEstimatorTabProps {
   coagResults: SampleEstimateResult[];
   poResults: KineticResult[];
   comparisons?: AssayComparisonItem[];
+  pairingSummary?: PairingSummary;
   threshold: number;
   setThreshold: (t: number) => void;
   thresholdBasis?: string;
@@ -67,6 +70,7 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
   coagResults = [],
   poResults = [],
   comparisons = [],
+  pairingSummary,
   threshold,
   setThreshold,
   thresholdBasis = 'Investigational study-defined screening cut-off',
@@ -92,16 +96,15 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
 
   // Coagulation row handlers
   const handleAddCoagRow = () => {
-    const nextIdx = coagRows.length + 1;
     setCoagRows((prev) => [
       ...prev,
       {
-        id: 'coag_smp_' + Date.now().toString().slice(-5),
-        sampleId: `S${nextIdx}`,
-        name: `Sample ${nextIdx}`,
+        id: generateRowId('coag_smp_'),
+        sampleId: '',
+        name: '',
         abs: '',
         replicates: '',
-        dilutionFactor: '1',
+        dilutionFactor: '',
       },
     ]);
   };
@@ -110,12 +113,12 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
     if (coagRows.length <= 1) {
       setCoagRows([
         {
-          id: 'coag_smp_1',
-          sampleId: 'S1',
-          name: 'Sample 1',
+          id: generateRowId('coag_smp_'),
+          sampleId: '',
+          name: '',
           abs: '',
           replicates: '',
-          dilutionFactor: '1',
+          dilutionFactor: '',
         },
       ]);
       return;
@@ -149,13 +152,13 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
 
   // Phenoloxidase row handlers
   const handleAddPoRow = () => {
-    const nextIdx = poRows.length + 1;
     setPoRows((prev) => [
       ...prev,
       {
-        id: 'po_smp_' + Date.now().toString().slice(-5),
-        sampleId: `S${nextIdx}`,
-        name: `Sample ${nextIdx}`,
+        id: generateRowId('po_smp_'),
+        sampleId: '',
+        name: '',
+        directRate: '',
         readings: {},
       },
     ]);
@@ -165,9 +168,10 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
     if (poRows.length <= 1) {
       setPoRows([
         {
-          id: 'po_smp_1',
-          sampleId: 'S1',
-          name: 'Sample 1',
+          id: generateRowId('po_smp_'),
+          sampleId: '',
+          name: '',
+          directRate: '',
           readings: {},
         },
       ]);
@@ -209,21 +213,32 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
     );
   };
 
-  // Categorize results: Matched pairs vs Single-assay only
-  const coagSampleIds = new Set(
-    coagResults.map((c) => (c.sampleId || '').trim().toUpperCase())
-  );
-  const poSampleIds = new Set(
-    poResults.map((p) => (p.sampleId || '').trim().toUpperCase())
-  );
+  // Single source of truth pairing summary (from props or computed from rows)
+  const activePairingSummary: PairingSummary = useMemo(() => {
+    return pairingSummary ?? computePairingSummary(coagRows, poRows);
+  }, [pairingSummary, coagRows, poRows]);
 
-  const coagOnlyResults = coagResults.filter(
-    (c) => !poSampleIds.has((c.sampleId || '').trim().toUpperCase())
-  );
+  const coagOnlyItems = useMemo(() => {
+    return activePairingSummary.coagOnly.map((co) => {
+      const result = coagResults.find((r) => getPairKey(r.sampleId, r.name) === co.key);
+      return {
+        key: co.key,
+        name: co.name,
+        result,
+      };
+    });
+  }, [activePairingSummary.coagOnly, coagResults]);
 
-  const poOnlyResults = poResults.filter(
-    (p) => !coagSampleIds.has((p.sampleId || '').trim().toUpperCase())
-  );
+  const poOnlyItems = useMemo(() => {
+    return activePairingSummary.poOnly.map((po) => {
+      const result = poResults.find((r) => r.type === 'sample' && getPairKey(r.sampleId, r.name) === po.key);
+      return {
+        key: po.key,
+        name: po.name,
+        result,
+      };
+    });
+  }, [activePairingSummary.poOnly, poResults]);
 
   const eligibleComparisons = comparisons.filter(
     (c) => c.isEligibleForQuantitativeStats
@@ -297,7 +312,7 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
               {kineticModel ? (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-violet-50 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800">
                   <Check className="w-3 h-3" />
-                  Rate = {kineticModel.slope.toFixed(4)}x + {kineticModel.intercept.toFixed(4)} (R² = {kineticModel.r2.toFixed(3)})
+                  Rate = {kineticModel.slope.toFixed(4)}x {kineticModel.intercept >= 0 ? '+' : '-'} {Math.abs(kineticModel.intercept).toFixed(4)} (R² = {kineticModel.r2.toFixed(3)})
                 </span>
               ) : (
                 <button
@@ -408,11 +423,11 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
                             <td className="p-1">
                               <input
                                 type="text"
-                                value={row.sampleId ?? `S${idx + 1}`}
+                                value={row.sampleId ?? ''}
                                 onChange={(e) => handleCoagRowChange(row.id, 'sampleId', e.target.value)}
-                                placeholder={`S${idx + 1}`}
-                                title="Sample ID (matched across assays)"
-                                className="w-16 px-1.5 py-1 text-xs font-mono font-bold text-indigo-700 dark:text-indigo-400 border border-slate-200 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-850 outline-none focus:border-indigo-500"
+                                placeholder="optional, defaults to name"
+                                title="Optional pair ID override (defaults to sample name)"
+                                className="w-24 px-1.5 py-1 text-xs font-mono font-bold text-indigo-700 dark:text-indigo-400 border border-slate-200 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-850 outline-none focus:border-indigo-500 placeholder:font-normal placeholder:text-[10px] placeholder:text-slate-400"
                               />
                             </td>
                             <td className="p-1">
@@ -559,11 +574,11 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
                             <td className="p-1">
                               <input
                                 type="text"
-                                value={row.sampleId ?? `S${idx + 1}`}
+                                value={row.sampleId ?? ''}
                                 onChange={(e) => handlePoRowChange(row.id, 'sampleId', e.target.value)}
-                                placeholder={`S${idx + 1}`}
-                                title="Sample ID (matched across assays)"
-                                className="w-16 px-1.5 py-1 text-xs font-mono font-bold text-violet-700 dark:text-violet-400 border border-slate-200 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-850 outline-none focus:border-violet-500"
+                                placeholder="optional, defaults to name"
+                                title="Optional pair ID override (defaults to sample name)"
+                                className="w-24 px-1.5 py-1 text-xs font-mono font-bold text-violet-700 dark:text-violet-400 border border-slate-200 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-850 outline-none focus:border-violet-500 placeholder:font-normal placeholder:text-[10px] placeholder:text-slate-400"
                               />
                             </td>
                             <td className="p-1">
@@ -714,17 +729,60 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
             )}
           </div>
 
+          {/* Pairing Summary Banner */}
+          <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="font-semibold text-indigo-950 dark:text-indigo-200 flex items-center gap-2">
+              <Split className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span>
+                {activePairingSummary.uniqueCount} unique samples: {activePairingSummary.pairedCount} paired, {activePairingSummary.coagOnly.length} coagulation-only, {activePairingSummary.poOnly.length} PO-only
+                {activePairingSummary.enteredWithoutValue.length > 0 ? `, ${activePairingSummary.enteredWithoutValue.length} entered without a value` : ''}
+              </span>
+            </div>
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">
+              Matched strictly by sample name (or optional Pair ID)
+            </span>
+          </div>
+
+          {/* Warnings: Duplicate Keys or Possible Typo Matches */}
+          {activePairingSummary.duplicateKeys.length > 0 && (
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-lg text-xs space-y-1 text-amber-900 dark:text-amber-200">
+              <div className="font-bold flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                Duplicate Sample Identifier Detected
+              </div>
+              {activePairingSummary.duplicateKeys.map((dup, i) => (
+                <div key={i} className="text-[11px]">
+                  &bull; Duplicate key &quot;<strong>{dup.key}</strong>&quot; in {dup.assay} across {dup.rows.length} rows ({dup.rows.join(', ')}). Duplicate-keyed samples cannot be uniquely paired.
+                </div>
+              ))}
+            </div>
+          )}
+
+          {activePairingSummary.possibleMatches.length > 0 && (
+            <div className="p-3 bg-sky-50 dark:bg-sky-950/50 border border-sky-200 dark:border-sky-800 rounded-lg text-xs space-y-1 text-sky-900 dark:text-sky-200">
+              <div className="font-bold flex items-center gap-1.5 text-sky-800 dark:text-sky-300">
+                <Split className="w-4 h-4 text-sky-600 shrink-0" />
+                Possible Naming Discrepancy (Unpaired Samples)
+              </div>
+              {activePairingSummary.possibleMatches.map((m, i) => (
+                <div key={i} className="text-[11px]">
+                  &bull; &quot;<strong>{m.coagName}</strong>&quot; (Coagulation) and &quot;<strong>{m.poName}</strong>&quot; (Phenoloxidase) differ by a minor edit distance (possible typo). Verify spelling if these represent the same sample.
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Quick Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3 bg-slate-50 dark:bg-slate-850 rounded-lg border border-slate-200 dark:border-slate-800 text-center">
               <span className="text-[10px] text-slate-400 uppercase font-bold block mb-0.5">
-                Total Samples Tested
+                Total Unique Samples
               </span>
               <span className="text-lg font-bold font-mono text-slate-900 dark:text-slate-100">
-                {coagResults.length + poResults.length}
+                {activePairingSummary.uniqueCount}
               </span>
               <span className="text-[10px] text-slate-400">
-                {coagResults.length} Coag &bull; {poResults.length} PO
+                across both assays
               </span>
             </div>
 
@@ -733,7 +791,7 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
                 Matched Pairs
               </span>
               <span className="text-lg font-bold font-mono text-indigo-700 dark:text-indigo-300">
-                {comparisons.length}
+                {activePairingSummary.pairedCount}
               </span>
               <span className="text-[10px] text-slate-400">
                 {eligibleComparisons.length} quantifiable
@@ -757,10 +815,10 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
                 Single-Assay Only
               </span>
               <span className="text-lg font-bold font-mono text-slate-700 dark:text-slate-300">
-                {coagOnlyResults.length + poOnlyResults.length}
+                {activePairingSummary.coagOnly.length + activePairingSummary.poOnly.length}
               </span>
               <span className="text-[10px] text-slate-400">
-                {coagOnlyResults.length} Coag only &bull; {poOnlyResults.length} PO only
+                {activePairingSummary.coagOnly.length} Coag only &bull; {activePairingSummary.poOnly.length} PO only
               </span>
             </div>
           </div>
@@ -919,42 +977,46 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
             </div>
           )}
 
-          {/* SECTION 2: Single-Assay Only Samples (Tested in one assay, but not the other) */}
-          {(coagOnlyResults.length > 0 || poOnlyResults.length > 0) && (
+          {/* SECTION 2: Single-Assay Only Samples & Entered Without Value */}
+          {(activePairingSummary.coagOnly.length > 0 || activePairingSummary.poOnly.length > 0 || activePairingSummary.enteredWithoutValue.length > 0) && (
             <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                 <Layers className="w-4 h-4 text-slate-500" />
-                Single-Assay Samples ({coagOnlyResults.length + poOnlyResults.length} samples tested in one method only)
+                Single-Assay &amp; Unpaired Samples ({activePairingSummary.coagOnly.length + activePairingSummary.poOnly.length} tested in one method only)
               </h4>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Coagulation-only */}
-                {coagOnlyResults.length > 0 && (
+                {activePairingSummary.coagOnly.length > 0 && (
                   <div className="border border-indigo-100 dark:border-indigo-900/50 rounded-lg p-3 bg-indigo-50/20 dark:bg-indigo-950/20 space-y-2">
                     <span className="text-[11px] font-bold text-indigo-900 dark:text-indigo-300 uppercase block">
-                      Tested on Coagulation Only ({coagOnlyResults.length})
+                      Tested on Coagulation Only ({activePairingSummary.coagOnly.length})
                     </span>
                     <div className="space-y-1.5">
-                      {coagOnlyResults.map((c) => (
+                      {coagOnlyItems.map((c) => (
                         <div
-                          key={c.id}
+                          key={c.key}
                           className="flex items-center justify-between p-2 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs"
                         >
                           <div>
-                            <span className="font-mono font-bold text-indigo-700 dark:text-indigo-400 mr-1.5">
-                              [{c.sampleId}]
-                            </span>
-                            <span className="font-medium">{c.name}</span>
+                            <span className="font-semibold text-slate-900 dark:text-slate-100">{c.name}</span>
+                            <span className="text-[10px] text-slate-400 block">Coagulation only</span>
                           </div>
                           <div className="text-right font-mono">
-                            <span className="font-bold text-indigo-900 dark:text-indigo-300">
-                              {c.reportedEu !== null && Number.isFinite(c.reportedEu)
-                                ? `${(c.reportedEu * c.dilutionFactor).toFixed(3)} EU/mL`
-                                : c.reportableText}
-                            </span>
-                            <span className="text-[10px] text-slate-400 block">
-                              Not tested in PO
-                            </span>
+                            {c.result ? (
+                              <>
+                                <span className="font-bold text-indigo-900 dark:text-indigo-300">
+                                  {c.result.reportedEu !== null && Number.isFinite(c.result.reportedEu)
+                                    ? `${(c.result.reportedEu * c.result.dilutionFactor).toFixed(3)} EU/mL`
+                                    : c.result.reportableText}
+                                </span>
+                                <span className="text-[10px] text-slate-400 block">
+                                  Not tested in PO
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-[11px] text-slate-400">Coagulation only</span>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -963,32 +1025,36 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
                 )}
 
                 {/* Phenoloxidase-only */}
-                {poOnlyResults.length > 0 && (
+                {activePairingSummary.poOnly.length > 0 && (
                   <div className="border border-violet-100 dark:border-violet-900/50 rounded-lg p-3 bg-violet-50/20 dark:bg-violet-950/20 space-y-2">
                     <span className="text-[11px] font-bold text-violet-900 dark:text-violet-300 uppercase block">
-                      Tested on Phenoloxidase Only ({poOnlyResults.length})
+                      Tested on Phenoloxidase Only ({activePairingSummary.poOnly.length})
                     </span>
                     <div className="space-y-1.5">
-                      {poOnlyResults.map((p) => (
+                      {poOnlyItems.map((p) => (
                         <div
-                          key={p.id}
+                          key={p.key}
                           className="flex items-center justify-between p-2 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs"
                         >
                           <div>
-                            <span className="font-mono font-bold text-violet-700 dark:text-violet-400 mr-1.5">
-                              [{p.sampleId}]
-                            </span>
-                            <span className="font-medium">{p.name}</span>
+                            <span className="font-semibold text-slate-900 dark:text-slate-100">{p.name}</span>
+                            <span className="text-[10px] text-slate-400 block">PO only</span>
                           </div>
                           <div className="text-right font-mono">
-                            <span className="font-bold text-violet-900 dark:text-violet-300">
-                              {p.reportedEu !== null && Number.isFinite(p.reportedEu)
-                                ? `${p.reportedEu.toFixed(3)} EU/mL`
-                                : p.reportableText}
-                            </span>
-                            <span className="text-[10px] text-slate-400 block">
-                              Not tested in Coag
-                            </span>
+                            {p.result ? (
+                              <>
+                                <span className="font-bold text-violet-900 dark:text-violet-300">
+                                  {p.result.reportedEu !== null && Number.isFinite(p.result.reportedEu)
+                                    ? `${p.result.reportedEu.toFixed(3)} EU/mL`
+                                    : p.result.reportableText}
+                                </span>
+                                <span className="text-[10px] text-slate-400 block">
+                                  Not tested in Coag
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-[11px] text-slate-400">PO only</span>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -996,6 +1062,25 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Rows entered without a measured value */}
+              {activePairingSummary.enteredWithoutValue.length > 0 && (
+                <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-850 rounded-lg border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs">
+                  <div className="font-bold text-slate-700 dark:text-slate-300 text-[11px] uppercase tracking-wide">
+                    Samples Entered Without Measured Value ({activePairingSummary.enteredWithoutValue.length})
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {activePairingSummary.enteredWithoutValue.map((item, i) => (
+                      <span
+                        key={i}
+                        className="px-2 py-1 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-[11px]"
+                      >
+                        <strong>{item.name}</strong>: entered without a value in {item.assay}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

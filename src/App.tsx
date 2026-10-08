@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   CalibrationRow,
   CalibrationModelFit,
@@ -11,6 +11,13 @@ import {
   KineticCalibrationModel,
   AssayComparisonItem,
   WavelengthSettings,
+  PairingSummary,
+  generateRowId,
+  createBlankPoStandardRow,
+  EMPTY_PO_STANDARD_ROWS,
+  EMPTY_CAL_ROWS,
+  EMPTY_COAG_SAMPLE_ROWS,
+  EMPTY_PO_SAMPLE_ROWS,
 } from './types';
 import {
   chooseModel,
@@ -18,6 +25,7 @@ import {
   computeSampleEstimates,
   computeKineticRates,
   computeAssayComparison,
+  computePairingSummary,
 } from './utils/math';
 import { formatCoagulationCsv, formatKineticCsv, formatComparisonCsv } from './utils/csv';
 import { DETERMINISTIC_STUDY_FIXTURE } from './data/studyFixtures';
@@ -32,12 +40,7 @@ import { FAVICON_COLLECTION, applyFaviconToDocument } from './data/favicons';
 import { useTheme } from './utils/theme';
 import { GitCompare } from 'lucide-react';
 
-const EMPTY_CAL_ROWS: CalibrationRow[] = [
-  { id: '1', eu: '', abs: '', replicates: '' },
-  { id: '2', eu: '', abs: '', replicates: '' },
-  { id: '3', eu: '', abs: '', replicates: '' },
-  { id: '4', eu: '', abs: '', replicates: '' },
-];
+export { EMPTY_PO_STANDARD_ROWS, EMPTY_CAL_ROWS, EMPTY_COAG_SAMPLE_ROWS, EMPTY_PO_SAMPLE_ROWS };
 
 const EXAMPLE_CAL_ROWS: CalibrationRow[] = [
   { id: '1', eu: '0', abs: '0.005', replicates: '' },
@@ -47,14 +50,6 @@ const EXAMPLE_CAL_ROWS: CalibrationRow[] = [
 ];
 
 const DEFAULT_TIME_POINTS = [0, 2, 4, 6, 8, 10];
-
-// Standalone PO Standards (Standards only — NO sampleId needed!)
-const EMPTY_PO_STANDARD_ROWS: PoStandardRow[] = [
-  { id: 'po_std_0', standardEu: '0.0', name: 'Calibrator Blank (0.0 EU)', readings: {} },
-  { id: 'po_std_1', standardEu: '0.5', name: 'Standard 0.5 EU/mL', readings: {} },
-  { id: 'po_std_2', standardEu: '2.0', name: 'Standard 2.0 EU/mL', readings: {} },
-  { id: 'po_std_3', standardEu: '5.0', name: 'Standard 5.0 EU/mL', readings: {} },
-];
 
 const EXAMPLE_PO_STANDARD_ROWS: PoStandardRow[] = [
   {
@@ -83,24 +78,10 @@ const EXAMPLE_PO_STANDARD_ROWS: PoStandardRow[] = [
   },
 ];
 
-// Table 1: Independent Coagulation Unknown Samples
-const EMPTY_COAG_SAMPLE_ROWS: SampleRow[] = [
-  { id: 'c1', sampleId: 'S1', name: '', abs: '', replicates: '', dilutionFactor: '1' },
-  { id: 'c2', sampleId: 'S2', name: '', abs: '', replicates: '', dilutionFactor: '1' },
-  { id: 'c3', sampleId: 'S3', name: '', abs: '', replicates: '', dilutionFactor: '1' },
-];
-
 const EXAMPLE_COAG_SAMPLE_ROWS: SampleRow[] = [
   { id: 'c1', sampleId: 'S1', name: 'Commercial Infusion A', abs: '0.082', replicates: '0.081, 0.083', dilutionFactor: '1' },
   { id: 'c2', sampleId: 'S2', name: 'Sterile Water Control', abs: '0.008', replicates: '', dilutionFactor: '1' },
   { id: 'c3', sampleId: 'S3', name: 'Commercial Infusion B', abs: '0.310', replicates: '0.308, 0.312', dilutionFactor: '1' },
-];
-
-// Table 2: Independent Phenoloxidase Unknown Samples
-const EMPTY_PO_SAMPLE_ROWS: PoSampleRow[] = [
-  { id: 'p1', sampleId: 'S1', name: '', readings: {} },
-  { id: 'p2', sampleId: 'S2', name: '', readings: {} },
-  { id: 'p3', sampleId: 'S3', name: '', readings: {} },
 ];
 
 const EXAMPLE_PO_SAMPLE_ROWS: PoSampleRow[] = [
@@ -176,6 +157,11 @@ export default function App() {
     }
   }, []);
 
+  // Single source of truth for cross-assay pairing counts and summary
+  const pairingSummary = useMemo(() => {
+    return computePairingSummary(coagRows, poRows);
+  }, [coagRows, poRows]);
+
   // Update Cross-Assay Concordance whenever sampleResults or kineticResults change
   useEffect(() => {
     if (sampleResults.length > 0 && kineticResults.length > 0) {
@@ -233,34 +219,42 @@ export default function App() {
 
   // Compute Phenoloxidase Standalone Standard Curve
   const handleComputePoCurve = () => {
-    const stdRows: KineticSampleRow[] = poStandardRows
-      .filter((r) => r.standardEu.trim() !== '' && Number.isFinite(parseFloat(r.standardEu.replace(',', '.'))))
-      .map((r, idx) => {
-        const hasDirect = r.directRate !== undefined && r.directRate.trim() !== '';
-        return {
-          id: r.id,
-          sampleId: `STD_${idx + 1}`,
-          name: r.name || `Standard ${r.standardEu} EU/mL`,
-          type: 'standard',
-          inputMode: hasDirect ? 'direct_rate' : (r.inputMode || 'series'),
-          standardEu: r.standardEu,
-          directRate: r.directRate,
-          readings: r.readings || {},
-        };
-      });
+    const stdRows: KineticSampleRow[] = poStandardRows.map((r, idx) => {
+      const hasDirect = r.directRate !== undefined && r.directRate.trim() !== '';
+      return {
+        id: r.id,
+        sampleId: `STD_${idx + 1}`,
+        name:
+          r.name ||
+          (r.standardEu && r.standardEu.trim() !== ''
+            ? `Standard ${r.standardEu} EU/mL`
+            : `Standard ${idx + 1}`),
+        type: 'standard',
+        inputMode: hasDirect ? 'direct_rate' : (r.inputMode || 'series'),
+        standardEu: r.standardEu,
+        directRate: r.directRate,
+        readings: r.readings || {},
+      };
+    });
 
-    if (stdRows.length < 2) {
-      setPoCurveError('Please enter at least 2 valid standard calibrator levels (EU/mL).');
-      return;
-    }
+    const { results, model: fittedModel, skippedRows } = computeKineticRates(
+      timePoints,
+      stdRows,
+      threshold,
+      runLabel
+    );
+    const validStandards = results.filter(
+      (r) => r.type === 'standard' && r.valid && r.standardEu !== undefined
+    );
 
-    const { results, model: fittedModel } = computeKineticRates(timePoints, stdRows, threshold, runLabel);
-    const validStandards = results.filter((r) => r.type === 'standard' && r.valid);
-
-    if (validStandards.length < 2 || !fittedModel) {
+    if (validStandards.length < 2 || !fittedModel || !fittedModel.isValid) {
+      const skippedMsg =
+        skippedRows && skippedRows.length > 0 ? ` (${skippedRows.join(', ')})` : '';
       setPoCurveError(
-        'Insufficient standard data: Enter time-course absorbance readings for at least 2 time points per standard (or enter direct velocity dA/min) for at least 2 standard levels.'
+        `Insufficient valid standard data: At least 2 standard levels with non-empty EU ≥ 0 and valid rates are required${skippedMsg}.`
       );
+      setKineticModel(null);
+      setPoStandardResults([]);
       return;
     }
 
@@ -285,8 +279,8 @@ export default function App() {
         if (!Number.isFinite(summary.mean)) return null;
         return {
           id: row.id,
-          sampleId: row.sampleId || `S${idx + 1}`,
-          name: row.name.trim() || row.sampleId || `Sample ${idx + 1}`,
+          sampleId: (row.sampleId && row.sampleId.trim()) || '',
+          name: row.name.trim() || (row.sampleId && row.sampleId.trim()) || '',
           abs: summary.mean,
           sd: summary.sd,
           cv: summary.cv,
@@ -335,8 +329,8 @@ export default function App() {
         const hasDirect = r.directRate !== undefined && r.directRate.trim() !== '';
         return {
           id: r.id,
-          sampleId: (r.sampleId && r.sampleId.trim()) || `S${idx + 1}`,
-          name: r.name.trim() || r.sampleId || `Sample ${idx + 1}`,
+          sampleId: (r.sampleId && r.sampleId.trim()) || '',
+          name: r.name.trim() || (r.sampleId && r.sampleId.trim()) || '',
           type: 'sample' as const,
           inputMode: hasDirect ? 'direct_rate' : (r.inputMode || 'series'),
           directRate: r.directRate,
@@ -389,21 +383,33 @@ export default function App() {
 
   // Clear Handlers
   const handleClearCal = () => {
-    setCalRows(EMPTY_CAL_ROWS);
+    setCalRows([
+      { id: generateRowId('coag_std_'), eu: '', abs: '', replicates: '' },
+      { id: generateRowId('coag_std_'), eu: '', abs: '', replicates: '' },
+    ]);
     setCalibration(null);
     setCoagCurveError(null);
   };
 
   const handleClearPoCurve = () => {
-    setPoStandardRows(EMPTY_PO_STANDARD_ROWS);
+    setPoStandardRows([
+      createBlankPoStandardRow(),
+      createBlankPoStandardRow(),
+    ]);
     setPoStandardResults([]);
     setKineticModel(null);
     setPoCurveError(null);
   };
 
   const handleClearSamples = () => {
-    setCoagRows(EMPTY_COAG_SAMPLE_ROWS);
-    setPoRows(EMPTY_PO_SAMPLE_ROWS);
+    setCoagRows([
+      { id: generateRowId('coag_smp_'), sampleId: '', name: '', abs: '', replicates: '', dilutionFactor: '' },
+      { id: generateRowId('coag_smp_'), sampleId: '', name: '', abs: '', replicates: '', dilutionFactor: '' },
+    ]);
+    setPoRows([
+      { id: generateRowId('po_smp_'), sampleId: '', name: '', directRate: '', readings: {} },
+      { id: generateRowId('po_smp_'), sampleId: '', name: '', directRate: '', readings: {} },
+    ]);
     setSampleResults([]);
     setKineticResults([]);
     setComparisons([]);
@@ -501,7 +507,7 @@ export default function App() {
       const summary = summarizeReplicates(absVal, r.replicates);
       return {
         id: r.id,
-        sampleId: r.sampleId || `S${idx + 1}`,
+        sampleId: (r.sampleId && r.sampleId.trim()) || '',
         name: r.name,
         abs: summary.mean,
         sd: summary.sd,
@@ -585,6 +591,7 @@ export default function App() {
     const csv = formatComparisonCsv({
       comparisons,
       runLabel,
+      pairingSummary,
       coagWavelength: wavelengths.coagulation,
       poWavelength: wavelengths.phenoloxidase,
     });
@@ -756,6 +763,7 @@ export default function App() {
                 coagResults={sampleResults}
                 poResults={kineticResults}
                 comparisons={comparisons}
+                pairingSummary={pairingSummary}
                 threshold={threshold}
                 setThreshold={setThreshold}
                 onEstimateAll={handleEstimateAll}
@@ -775,6 +783,7 @@ export default function App() {
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xs">
                 <DualAssayComparisonSection
                   comparisons={comparisons}
+                  pairingSummary={pairingSummary}
                   onDownloadCsv={handleDownloadComparisonCsv}
                   isPrintView={false}
                 />
@@ -789,6 +798,7 @@ export default function App() {
                 kineticResults={kineticResults}
                 kineticModel={kineticModel}
                 comparisons={comparisons}
+                pairingSummary={pairingSummary}
                 threshold={threshold}
                 wavelengths={wavelengths}
                 onPrint={handlePrint}
@@ -808,6 +818,7 @@ export default function App() {
               kineticResults={kineticResults}
               kineticModel={kineticModel}
               comparisons={comparisons}
+              pairingSummary={pairingSummary}
               threshold={threshold}
               wavelengths={wavelengths}
               onPrint={handlePrint}

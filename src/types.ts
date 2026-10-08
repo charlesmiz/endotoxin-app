@@ -214,11 +214,51 @@ export interface KineticCalibrationModel {
   r2: number;
   stderr?: number;
   points: [number, number][]; // [standard EU/mL, kinetic rate dA/min]
+  pointsMeta?: { rowIdx: number; name?: string; eu: number; rate: number }[];
   xMin: number;
   xMax: number;
   isValid: boolean;
   validationError?: string;
+  skippedRows?: string[];
+  duplicateEuWarnings?: string[];
 }
+
+let globalIdCounter = 0;
+export function generateRowId(prefix = 'po_std_'): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `${prefix}${crypto.randomUUID()}`;
+  }
+  globalIdCounter += 1;
+  return `${prefix}${Date.now()}_${globalIdCounter}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+export const createBlankPoStandardRow = (prefix = 'po_std_'): PoStandardRow => ({
+  id: generateRowId(prefix),
+  standardEu: '',
+  name: '',
+  directRate: '',
+  readings: {},
+});
+
+export const EMPTY_PO_STANDARD_ROWS: PoStandardRow[] = [
+  { id: 'po_std_init_1', standardEu: '', name: '', directRate: '', readings: {} },
+  { id: 'po_std_init_2', standardEu: '', name: '', directRate: '', readings: {} },
+];
+
+export const EMPTY_CAL_ROWS: CalibrationRow[] = [
+  { id: 'coag_std_1', eu: '', abs: '', replicates: '' },
+  { id: 'coag_std_2', eu: '', abs: '', replicates: '' },
+];
+
+export const EMPTY_COAG_SAMPLE_ROWS: SampleRow[] = [
+  { id: 'coag_smp_1', sampleId: '', name: '', abs: '', replicates: '', dilutionFactor: '' },
+  { id: 'coag_smp_2', sampleId: '', name: '', abs: '', replicates: '', dilutionFactor: '' },
+];
+
+export const EMPTY_PO_SAMPLE_ROWS: PoSampleRow[] = [
+  { id: 'po_smp_1', sampleId: '', name: '', directRate: '', readings: {} },
+  { id: 'po_smp_2', sampleId: '', name: '', directRate: '', readings: {} },
+];
 
 export interface KineticResult {
   id: string;
@@ -250,6 +290,41 @@ export interface KineticResult {
   outOfRange?: boolean;
   negativeEstimate?: boolean;
   valid: boolean;
+}
+
+export interface PairingSummaryItem {
+  key: string;
+  name: string;
+  assay?: 'coagulation' | 'phenoloxidase';
+}
+
+export interface DuplicateKeyItem {
+  assay: 'coagulation' | 'phenoloxidase';
+  key: string;
+  rows: (string | number)[];
+}
+
+export interface PossibleMatchItem {
+  coagName: string;
+  poName: string;
+}
+
+export interface EnteredWithoutValueItem {
+  assay: 'coagulation' | 'phenoloxidase';
+  key: string;
+  name: string;
+}
+
+export interface PairingSummary {
+  uniqueCount: number;
+  pairedCount: number;
+  coagOnly: PairingSummaryItem[];
+  poOnly: PairingSummaryItem[];
+  duplicateKeys: DuplicateKeyItem[];
+  possibleMatches: PossibleMatchItem[];
+  enteredWithoutValue: EnteredWithoutValueItem[];
+  coagEnteredWithoutValue: PairingSummaryItem[];
+  poEnteredWithoutValue: PairingSummaryItem[];
 }
 
 export interface AssayComparisonItem {

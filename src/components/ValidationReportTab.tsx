@@ -7,6 +7,7 @@ import {
   KineticCalibrationModel,
   AssayComparisonItem,
   WavelengthSettings,
+  PairingSummary,
 } from '../types';
 import { PlotlyChart } from './PlotlyChart';
 import { KineticChart } from './KineticChart';
@@ -40,6 +41,7 @@ interface ValidationReportTabProps {
   kineticResults?: KineticResult[];
   kineticModel?: KineticCalibrationModel | null;
   comparisons?: AssayComparisonItem[];
+  pairingSummary?: PairingSummary;
   threshold: number;
   thresholdBasis?: string;
   wavelengths?: WavelengthSettings;
@@ -57,6 +59,7 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
   kineticResults = [],
   kineticModel = null,
   comparisons = [],
+  pairingSummary,
   threshold,
   thresholdBasis = 'Investigational research decision threshold',
   wavelengths = { coagulation: 540, phenoloxidase: 490 },
@@ -330,12 +333,17 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
       segments.push(poText);
     }
 
-    if (showCompareSection && comparisons.length > 0) {
+    if (showCompareSection && (comparisons.length > 0 || (pairingSummary && pairingSummary.uniqueCount > 0))) {
       const highCount = comparisons.filter((c) => c.concordance === 'high').length;
       const meanRpd =
-        comparisons.reduce((acc, c) => acc + c.rpd, 0) / comparisons.length;
+        comparisons.length > 0
+          ? comparisons.reduce((acc, c) => acc + (c.rpd ?? 0), 0) / comparisons.length
+          : 0;
+      const countPrefix = pairingSummary
+        ? `Dual-Assay Concordance: ${pairingSummary.uniqueCount} unique sample(s) evaluated (${pairingSummary.pairedCount} matched pair(s), ${pairingSummary.coagOnly.length} coag-only, ${pairingSummary.poOnly.length} PO-only)`
+        : `Dual-Assay Concordance: ${comparisons.length} sample(s) cross-compared`;
       segments.push(
-        `Dual-Assay Concordance: ${comparisons.length} sample(s) cross-compared with mean RPD of ${meanRpd.toFixed(1)}% (${highCount}/${comparisons.length} high concordance ≤15%).`
+        `${countPrefix} with mean RPD of ${meanRpd.toFixed(1)}% (${highCount}/${comparisons.length} high concordance ≤15%).`
       );
     }
 
@@ -944,6 +952,7 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
             </h2>
             <DualAssayComparisonSection
               comparisons={comparisons}
+              pairingSummary={pairingSummary}
               onDownloadCsv={onDownloadComparisonCsv || (() => {})}
               isPrintView={true}
             />

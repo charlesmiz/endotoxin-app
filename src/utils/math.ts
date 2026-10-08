@@ -15,6 +15,12 @@ import {
   AgreementAnalysisSummary,
   ModelDiagnosticComparison,
   AnalyticalHierarchyStatus,
+  PairingSummary,
+  PairingSummaryItem,
+  DuplicateKeyItem,
+  PossibleMatchItem,
+  EnteredWithoutValueItem,
+  generateRowId,
 } from '../types';
 
 /**
@@ -676,9 +682,9 @@ export function computeSampleEstimates(
   const absMax = absValues.length ? Math.max(...absValues) : NaN;
 
   return samples.map((s, idx) => {
-    const id = s.id || `s_${idx + 1}`;
-    const sampleId = (s.sampleId && s.sampleId.trim()) || `S${idx + 1}`;
-    const name = s.name.trim() || `Sample ${idx + 1}`;
+    const id = s.id || generateRowId('s_');
+    const sampleId = (s.sampleId && s.sampleId.trim()) || '';
+    const name = s.name.trim() || (s.sampleId && s.sampleId.trim()) || '';
     const df = s.dilutionFactor && s.dilutionFactor > 0 ? s.dilutionFactor : 1;
     const sdVal = s.sd !== undefined ? s.sd : NaN;
     const cvVal = s.cv !== undefined ? s.cv : NaN;
@@ -895,28 +901,48 @@ export function computeKineticRates(
 ): {
   results: KineticResult[];
   model: KineticCalibrationModel | null;
+  skippedRows?: string[];
 } {
   const computedResults: KineticResult[] = rows.map((row, idx) => {
-    const id = row.id || `k_${idx + 1}`;
-    const sampleId = (row.sampleId && row.sampleId.trim()) || `K_S${idx + 1}`;
-    const mode = row.inputMode || 'series';
+    const id = row.id || generateRowId('k_');
+    const sampleId = (row.sampleId && row.sampleId.trim()) || '';
+    const hasDirect = row.directRate !== undefined && row.directRate.trim() !== '';
+    const hasReadings = Boolean(
+      row.readings &&
+        Object.keys(row.readings).some(
+          (k) => row.readings[Number(k)] && row.readings[Number(k)].trim() !== ''
+        )
+    );
+    const mode =
+      row.inputMode === 'direct_rate' || (hasDirect && !hasReadings)
+        ? 'direct_rate'
+        : row.inputMode || 'series';
     const isStandard = row.type === 'standard';
+    const stdEuRaw = row.standardEu !== undefined ? row.standardEu.trim() : '';
     const stdEuNum =
-      isStandard && row.standardEu !== undefined && row.standardEu.trim() !== ''
-        ? parseFloat(row.standardEu)
+      isStandard &&
+      stdEuRaw !== '' &&
+      Number.isFinite(parseFloat(stdEuRaw.replace(',', '.')))
+        ? parseFloat(stdEuRaw.replace(',', '.'))
         : undefined;
 
     const sampleDisplayName =
-      row.name.trim() || (row.sampleId ? row.sampleId.trim() : '') || 'Unnamed Sample';
+      row.name.trim() ||
+      (row.sampleId ? row.sampleId.trim() : '') ||
+      (isStandard
+        ? `Standard ${stdEuNum !== undefined ? `${stdEuNum} EU/mL` : idx + 1}`
+        : '');
 
     // MODE 1: Direct Pre-calculated Rate
     if (mode === 'direct_rate') {
       const rateVal =
         row.directRate !== undefined && row.directRate.trim() !== ''
-          ? parseFloat(row.directRate)
+          ? parseFloat(row.directRate.replace(',', '.'))
           : NaN;
 
-      const isValid = Number.isFinite(rateVal) && Boolean(row.name.trim() || row.sampleId?.trim());
+      const isValid =
+        Number.isFinite(rateVal) &&
+        (Boolean(row.name.trim() || row.sampleId?.trim()) || isStandard);
       const activityLevel: 'baseline' | 'active' | 'high' =
         rateVal >= 0.01
           ? 'high'
@@ -986,7 +1012,7 @@ export function computeKineticRates(
       }
     });
 
-    if (validPairs.length < 2 || (!row.name.trim() && !row.sampleId?.trim())) {
+    if (validPairs.length < 2 || (!row.name.trim() && !row.sampleId?.trim() && !isStandard)) {
       return {
         id,
         sampleId,
@@ -1061,15 +1087,47 @@ export function computeKineticRates(
 
   // Fit Kinetic Standard Calibration Curve if >= 2 valid standards exist
   const standardPoints: [number, number][] = [];
-  computedResults.forEach((res) => {
-    if (
-      res.valid &&
-      res.type === 'standard' &&
-      res.standardEu !== undefined &&
-      Number.isFinite(res.standardEu)
-    ) {
-      standardPoints.push([res.standardEu, res.rate]);
+  const pointsMeta: { rowIdx: number; name?: string; eu: number; rate: number }[] = [];
+  const skippedRows: string[] = [];
+
+  rows.forEach((row, idx) => {
+    if (row.type !== 'standard') return;
+    const rowNum = idx + 1;
+    const stdEuRaw = row.standardEu !== undefined ? row.standardEu.trim() : '';
+
+    // Check EU concentration: must be non-empty, finite number >= 0
+    if (stdEuRaw === '') {
+      skippedRows.push(`Row ${rowNum} ignored: EU empty`);
+      return;
     }
+
+    const euNum = parseFloat(stdEuRaw.replace(',', '.'));
+    if (!Number.isFinite(euNum) || euNum < 0) {
+      skippedRows.push(`Row ${rowNum} ignored: EU invalid (${row.standardEu})`);
+      return;
+    }
+
+    // Check rate: direct rate filled or at least 2 valid time readings
+    const computedRes = computedResults[idx];
+    if (!computedRes || !computedRes.valid || !Number.isFinite(computedRes.rate)) {
+      const isDirect =
+        row.inputMode === 'direct_rate' ||
+        (row.directRate !== undefined && row.directRate.trim() !== '');
+      if (isDirect) {
+        skippedRows.push(`Row ${rowNum} ignored: missing direct velocity (dA/min)`);
+      } else {
+        skippedRows.push(`Row ${rowNum} ignored: insufficient readings for rate fit (needs ≥2 time points)`);
+      }
+      return;
+    }
+
+    standardPoints.push([euNum, computedRes.rate]);
+    pointsMeta.push({
+      rowIdx: rowNum,
+      name: row.name ? row.name.trim() : undefined,
+      eu: euNum,
+      rate: computedRes.rate,
+    });
   });
 
   standardPoints.sort((a, b) => a[0] - b[0]);
@@ -1080,18 +1138,37 @@ export function computeKineticRates(
     const xVals = standardPoints.map((p) => p[0]);
     const isValidSlope = Number.isFinite(reg.slope) && reg.slope > 0;
 
+    const duplicateEuWarnings: string[] = [];
+    const euMap = new Map<number, { count: number; rows: string[] }>();
+    pointsMeta.forEach((pt) => {
+      const entry = euMap.get(pt.eu) || { count: 0, rows: [] };
+      entry.count += 1;
+      entry.rows.push(`Row ${pt.rowIdx}${pt.name ? ` (${pt.name})` : ''}`);
+      euMap.set(pt.eu, entry);
+    });
+    euMap.forEach((entry, eu) => {
+      if (entry.count > 1) {
+        duplicateEuWarnings.push(
+          `Warning: Duplicate EU concentration (${eu} EU/mL) used in calibration across ${entry.count} standard calibrators (${entry.rows.join(', ')}).`
+        );
+      }
+    });
+
     model = {
       slope: reg.slope,
       intercept: reg.intercept,
       r2: reg.r2,
       stderr: reg.stderr,
       points: standardPoints,
+      pointsMeta,
       xMin: Math.min(...xVals),
       xMax: Math.max(...xVals),
       isValid: isValidSlope,
       validationError: isValidSlope
         ? undefined
         : `PO calibration curve slope is non-positive (slope = ${reg.slope.toFixed(4)}). Inverted EU/mL estimation disabled.`,
+      skippedRows,
+      duplicateEuWarnings,
     };
 
     // Calculate estimated EU/mL for unknown samples using the PO curve
@@ -1138,6 +1215,7 @@ export function computeKineticRates(
   return {
     results: computedResults,
     model,
+    skippedRows,
   };
 }
 
@@ -1215,8 +1293,249 @@ export function studentTPValue(t: number, df: number): number {
 }
 
 /**
- * Pairs Coagulation and Phenoloxidase results strictly by sampleId and runId.
- * Never pairs rows by display-name substring matching.
+ * Normalises sample identifier for cross-assay pairing.
+ * Prefers explicit non-empty sampleId override if provided; otherwise falls back to sample name.
+ * Normalisation rules:
+ * - trim & lower-case
+ * - collapse multiple whitespace to single space
+ * - standardise "%" spacing consistently ("5 %" and "5%" -> "5%")
+ * - strip leading/trailing punctuation marks
+ * Returns '' if both sampleId and name are empty (rows with empty keys are never paired).
+ */
+export function getPairKey(sampleId: string | undefined, name: string | undefined): string {
+  const raw = (sampleId && sampleId.trim() !== '') ? sampleId.trim() : (name ? name.trim() : '');
+  if (!raw) return '';
+  return raw
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/\s*%\s*/g, '% ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^[\s.,;:!?'"()[\]{}<>-]+|[\s.,;:!?'"()[\]{}<>-]+$/g, '')
+    .trim();
+}
+
+/**
+ * Levenshtein edit distance between two strings for detecting possible typo mismatches.
+ */
+export function levenshteinDistance(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const d: number[][] = [];
+  for (let i = 0; i <= m; i++) d[i] = [i];
+  for (let j = 0; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(
+        d[i - 1][j] + 1,
+        d[i][j - 1] + 1,
+        d[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return d[m][n];
+}
+
+/**
+ * Checks if a coagulation item has a valid, finite measured absorbance.
+ */
+export function hasCoagMeasuredValue(item: any): boolean {
+  if (!item) return false;
+  if (typeof item.abs === 'number' && Number.isFinite(item.abs)) {
+    return true;
+  }
+  if (typeof item.abs === 'string' && item.abs.trim() !== '') {
+    const val = parseFloat(item.abs.replace(',', '.'));
+    if (Number.isFinite(val)) return true;
+  }
+  if (typeof item.replicates === 'string' && item.replicates.trim() !== '') {
+    const tokens = item.replicates.split(/[,;\s]+/).map((t: string) => parseFloat(t.replace(',', '.')));
+    if (tokens.some((v: number) => Number.isFinite(v))) return true;
+  }
+  if (Array.isArray(item.replicates) && item.replicates.length > 0) {
+    if (item.replicates.some((v: any) => typeof v === 'number' && Number.isFinite(v))) return true;
+  }
+  return false;
+}
+
+/**
+ * Checks if a phenoloxidase item has a valid measured rate or sufficient readings.
+ */
+export function hasPoMeasuredValue(item: any): boolean {
+  if (!item) return false;
+  if (item.type === 'standard') return false;
+  if (typeof item.rate === 'number' && Number.isFinite(item.rate) && item.valid !== false) {
+    return true;
+  }
+  if (typeof item.directRate === 'string' && item.directRate.trim() !== '') {
+    const val = parseFloat(item.directRate.replace(',', '.'));
+    if (Number.isFinite(val)) return true;
+  }
+  if (typeof item.directRate === 'number' && Number.isFinite(item.directRate)) {
+    return true;
+  }
+  if (item.readings && typeof item.readings === 'object') {
+    let validCount = 0;
+    for (const key of Object.keys(item.readings)) {
+      const v = item.readings[key];
+      if (typeof v === 'number' && Number.isFinite(v)) validCount++;
+      else if (typeof v === 'string' && v.trim() !== '') {
+        const parsed = parseFloat(v.replace(',', '.'));
+        if (Number.isFinite(parsed)) validCount++;
+      }
+    }
+    if (validCount >= 2) return true;
+  }
+  if (Array.isArray(item.absReadings) && item.absReadings.length >= 2) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Computes cross-assay pairing summary by normalizing keys on both sides independently.
+ * Builds unique pair keys from the union of BOTH lists independently.
+ * Identifies paired samples, coagulation-only, PO-only, duplicate keys, and rows entered without measured values.
+ */
+export function computePairingSummary(
+  coagResults: any[] = [],
+  poResults: any[] = [],
+  targetRunId?: string
+): PairingSummary {
+  const coagMeasuredMap = new Map<string, { key: string; name: string; item: any; rows: (string | number)[] }>();
+  const coagDupKeys = new Set<string>();
+  const coagEnteredWithoutValue: PairingSummaryItem[] = [];
+
+  coagResults.forEach((c, idx) => {
+    if (targetRunId && c.runId && c.runId !== targetRunId) return;
+    const key = getPairKey(c.sampleId, c.name);
+    if (!key) return;
+
+    const name = (c.name && c.name.trim() !== '') ? c.name.trim() : (c.sampleId ? c.sampleId.trim() : key);
+    const rowId = c.id || idx + 1;
+
+    if (!hasCoagMeasuredValue(c)) {
+      coagEnteredWithoutValue.push({ key, name, assay: 'coagulation' });
+      return;
+    }
+
+    if (coagMeasuredMap.has(key)) {
+      coagDupKeys.add(key);
+      const entry = coagMeasuredMap.get(key)!;
+      entry.rows.push(rowId);
+    } else {
+      coagMeasuredMap.set(key, { key, name, item: c, rows: [rowId] });
+    }
+  });
+
+  const poMeasuredMap = new Map<string, { key: string; name: string; item: any; rows: (string | number)[] }>();
+  const poDupKeys = new Set<string>();
+  const poEnteredWithoutValue: PairingSummaryItem[] = [];
+
+  poResults.forEach((p, idx) => {
+    if (p.type === 'standard') return;
+    if (targetRunId && p.runId && p.runId !== targetRunId) return;
+    const key = getPairKey(p.sampleId, p.name);
+    if (!key) return;
+
+    const name = (p.name && p.name.trim() !== '') ? p.name.trim() : (p.sampleId ? p.sampleId.trim() : key);
+    const rowId = p.id || idx + 1;
+
+    if (!hasPoMeasuredValue(p)) {
+      poEnteredWithoutValue.push({ key, name, assay: 'phenoloxidase' });
+      return;
+    }
+
+    if (poMeasuredMap.has(key)) {
+      poDupKeys.add(key);
+      const entry = poMeasuredMap.get(key)!;
+      entry.rows.push(rowId);
+    } else {
+      poMeasuredMap.set(key, { key, name, item: p, rows: [rowId] });
+    }
+  });
+
+  const duplicateKeys: DuplicateKeyItem[] = [];
+  coagDupKeys.forEach((key) => {
+    const entry = coagMeasuredMap.get(key);
+    duplicateKeys.push({
+      assay: 'coagulation',
+      key,
+      rows: entry ? entry.rows : [],
+    });
+  });
+  poDupKeys.forEach((key) => {
+    const entry = poMeasuredMap.get(key);
+    duplicateKeys.push({
+      assay: 'phenoloxidase',
+      key,
+      rows: entry ? entry.rows : [],
+    });
+  });
+
+  let pairedCount = 0;
+  const coagOnly: PairingSummaryItem[] = [];
+  const poOnly: PairingSummaryItem[] = [];
+
+  // Union of measured keys across BOTH assays
+  const uniqueKeysSet = new Set<string>();
+
+  coagMeasuredMap.forEach((entry, key) => {
+    uniqueKeysSet.add(key);
+    const isDup = coagDupKeys.has(key) || poDupKeys.has(key);
+    if (!isDup && poMeasuredMap.has(key)) {
+      pairedCount += 1;
+    } else if (!poMeasuredMap.has(key) && !coagDupKeys.has(key)) {
+      coagOnly.push({ key, name: entry.name, assay: 'coagulation' });
+    }
+  });
+
+  poMeasuredMap.forEach((entry, key) => {
+    uniqueKeysSet.add(key);
+    if (!coagMeasuredMap.has(key) && !poDupKeys.has(key)) {
+      poOnly.push({ key, name: entry.name, assay: 'phenoloxidase' });
+    }
+  });
+
+  const uniqueCount = uniqueKeysSet.size;
+
+  const possibleMatches: PossibleMatchItem[] = [];
+  coagOnly.forEach((c) => {
+    poOnly.forEach((p) => {
+      if (c.key !== p.key) {
+        const dist = levenshteinDistance(c.key, p.key);
+        if (dist <= 2) {
+          possibleMatches.push({ coagName: c.name, poName: p.name });
+        }
+      }
+    });
+  });
+
+  const enteredWithoutValue: EnteredWithoutValueItem[] = [
+    ...coagEnteredWithoutValue.map((c) => ({ assay: 'coagulation' as const, key: c.key, name: c.name })),
+    ...poEnteredWithoutValue.map((p) => ({ assay: 'phenoloxidase' as const, key: p.key, name: p.name })),
+  ];
+
+  return {
+    uniqueCount,
+    pairedCount,
+    coagOnly,
+    poOnly,
+    duplicateKeys,
+    possibleMatches,
+    enteredWithoutValue,
+    coagEnteredWithoutValue,
+    poEnteredWithoutValue,
+  };
+}
+
+/**
+ * Pairs Coagulation and Phenoloxidase results strictly by getPairKey (Sample ID override or sample Name).
+ * Never pairs rows by row index or position.
+ * Excludes duplicate-keyed rows from pairing to avoid ambiguous matching.
  * Excludes non-quantifiable (below-blank or out-of-range) observations from quantitative statistics.
  */
 export function computeAssayComparison(
@@ -1233,109 +1552,118 @@ export function computeAssayComparison(
     (p) => p.valid && p.type === 'sample' && (!targetRunId || p.runId === targetRunId)
   );
 
-  coagResults.forEach((c) => {
-    if (targetRunId && c.runId !== targetRunId) return;
+  const eligibleCoag = coagResults.filter(
+    (c) => !targetRunId || c.runId === targetRunId
+  );
 
-    // Strict pairing by sampleId
-    const cSampleId = (c.sampleId || '').trim().toUpperCase();
-    if (!cSampleId) return;
+  const summary = computePairingSummary(eligibleCoag, eligiblePo, targetRunId);
+  const dupKeySet = new Set(summary.duplicateKeys.map((d) => d.key));
 
-    const matchedPo = eligiblePo.find(
-      (p) => (p.sampleId || '').trim().toUpperCase() === cSampleId
-    );
-
-    if (matchedPo) {
-      const isCoagQuantifiable =
-        c.analyticalStatus === 'WITHIN_RANGE' &&
-        c.reportedEu !== null &&
-        Number.isFinite(c.reportedEu);
-
-      const isPoQuantifiable =
-        matchedPo.analyticalStatus === 'WITHIN_RANGE' &&
-        matchedPo.reportedEu !== null &&
-        matchedPo.reportedEu !== undefined &&
-        Number.isFinite(matchedPo.reportedEu);
-
-      const isEligibleForQuantitativeStats =
-        isCoagQuantifiable && isPoQuantifiable;
-
-      let exclusionReason: string | undefined;
-      if (!isCoagQuantifiable) {
-        exclusionReason = `Coagulation: ${c.reportableText || c.analyticalStatus}`;
-      } else if (!isPoQuantifiable) {
-        exclusionReason = `Phenoloxidase: ${matchedPo.reportableText || matchedPo.analyticalStatus || 'Not quantifiable'}`;
-      }
-
-      let coagEu: number | null = null;
-      let poEu: number | null = null;
-      let absDiff: number | null = null;
-      let rpd: number | null = null;
-      let ratio: number | null = null;
-      let isLowConcentration = false;
-      let lowConcentrationWarning: string | undefined;
-      let agreement: 'AGREE' | 'DISAGREE' | 'EXCLUDED' = 'EXCLUDED';
-      let concordance: 'high' | 'moderate' | 'discordant' | 'non_quantifiable' =
-        'non_quantifiable';
-      let comment = '';
-
-      if (isEligibleForQuantitativeStats) {
-        coagEu = c.reportedEu! * c.dilutionFactor;
-        poEu = matchedPo.reportedEu!;
-        absDiff = Math.abs(coagEu - poEu);
-        const avg = (coagEu + poEu) / 2;
-        rpd = avg > 0 ? (absDiff / avg) * 100 : 0;
-        ratio = poEu > 0 ? coagEu / poEu : null;
-
-        if (avg < lowConcThresholdEu) {
-          isLowConcentration = true;
-          lowConcentrationWarning = `Low concentration (< ${lowConcThresholdEu.toFixed(3)} EU/mL): RPD is mathematically amplified by baseline optical noise. Prioritize absolute difference |ΔEU| = ${absDiff.toFixed(4)} EU/mL.`;
-        }
-
-        agreement = rpd <= disagreementThresholdPct ? 'AGREE' : 'DISAGREE';
-
-        if (rpd <= tier1RpdPct) {
-          concordance = 'high';
-          comment = `Tier 1 Exploratory Agreement (RPD: ${rpd.toFixed(1)}% ≤ ${tier1RpdPct}% [study-defined criterion], |ΔEU| = ${absDiff.toFixed(4)}).`;
-        } else if (rpd <= disagreementThresholdPct) {
-          concordance = 'moderate';
-          comment = `Tier 2 Exploratory Agreement (RPD: ${rpd.toFixed(1)}% ≤ ${disagreementThresholdPct.toFixed(0)}% [study-defined criterion], |ΔEU| = ${absDiff.toFixed(4)}).`;
-        } else {
-          concordance = 'discordant';
-          comment = `Discordant (RPD: ${rpd.toFixed(1)}% > ${disagreementThresholdPct.toFixed(0)}%, |ΔEU| = ${absDiff.toFixed(4)}). Disagreement between clotting and enzyme rate — investigate matrix interference or reaction kinetics.`;
-        }
-      } else {
-        agreement = 'EXCLUDED';
-        concordance = 'non_quantifiable';
-        comment = `Excluded from quantitative comparison statistics: ${exclusionReason}.`;
-      }
-
-      comparisons.push({
-        id: `${c.sampleId}_${matchedPo.id}`,
-        sampleId: c.sampleId,
-        runId: c.runId || 'Run 1',
-        name: c.name,
-        coagEu,
-        coagRawEu: c.rawEu,
-        coagAbs: c.abs,
-        coagStatus: c.status,
-        coagAnalyticalStatus: c.analyticalStatus,
-        poEu,
-        poRawEu: matchedPo.estimatedEu ?? NaN,
-        poRate: matchedPo.rate,
-        poStatus: matchedPo.status || 'PASS',
-        poAnalyticalStatus: matchedPo.analyticalStatus,
-        isEligibleForQuantitativeStats,
-        exclusionReason,
-        absDiff,
-        rpd,
-        ratio,
-        isLowConcentration,
-        lowConcentrationWarning,
-        agreement,
-        concordance,
-        comment,
-      });
+  const poByKey = new Map<string, KineticResult>();
+  eligiblePo.forEach((p) => {
+    const key = getPairKey(p.sampleId, p.name);
+    if (key && !dupKeySet.has(key)) {
+      poByKey.set(key, p);
     }
+  });
+
+  eligibleCoag.forEach((c) => {
+    const key = getPairKey(c.sampleId, c.name);
+    if (!key || dupKeySet.has(key)) return;
+
+    const matchedPo = poByKey.get(key);
+    if (!matchedPo) return;
+
+    const isCoagQuantifiable =
+      c.analyticalStatus === 'WITHIN_RANGE' &&
+      c.reportedEu !== null &&
+      Number.isFinite(c.reportedEu);
+
+    const isPoQuantifiable =
+      matchedPo.analyticalStatus === 'WITHIN_RANGE' &&
+      matchedPo.reportedEu !== null &&
+      matchedPo.reportedEu !== undefined &&
+      Number.isFinite(matchedPo.reportedEu);
+
+    const isEligibleForQuantitativeStats =
+      isCoagQuantifiable && isPoQuantifiable;
+
+    let exclusionReason: string | undefined;
+    if (!isCoagQuantifiable) {
+      exclusionReason = `Coagulation: ${c.reportableText || c.analyticalStatus}`;
+    } else if (!isPoQuantifiable) {
+      exclusionReason = `Phenoloxidase: ${matchedPo.reportableText || matchedPo.analyticalStatus || 'Not quantifiable'}`;
+    }
+
+    let coagEu: number | null = null;
+    let poEu: number | null = null;
+    let absDiff: number | null = null;
+    let rpd: number | null = null;
+    let ratio: number | null = null;
+    let isLowConcentration = false;
+    let lowConcentrationWarning: string | undefined;
+    let agreement: 'AGREE' | 'DISAGREE' | 'EXCLUDED' = 'EXCLUDED';
+    let concordance: 'high' | 'moderate' | 'discordant' | 'non_quantifiable' =
+      'non_quantifiable';
+    let comment = '';
+
+    if (isEligibleForQuantitativeStats) {
+      coagEu = c.reportedEu! * c.dilutionFactor;
+      poEu = matchedPo.reportedEu!;
+      absDiff = Math.abs(coagEu - poEu);
+      const avg = (coagEu + poEu) / 2;
+      rpd = avg > 0 ? (absDiff / avg) * 100 : 0;
+      ratio = poEu > 0 ? coagEu / poEu : null;
+
+      if (avg < lowConcThresholdEu) {
+        isLowConcentration = true;
+        lowConcentrationWarning = `Low concentration (< ${lowConcThresholdEu.toFixed(3)} EU/mL): RPD is mathematically amplified by baseline optical noise. Prioritize absolute difference |ΔEU| = ${absDiff.toFixed(4)} EU/mL.`;
+      }
+
+      agreement = rpd <= disagreementThresholdPct ? 'AGREE' : 'DISAGREE';
+
+      if (rpd <= tier1RpdPct) {
+        concordance = 'high';
+        comment = `Tier 1 Exploratory Agreement (RPD: ${rpd.toFixed(1)}% ≤ ${tier1RpdPct}% [study-defined criterion], |ΔEU| = ${absDiff.toFixed(4)}).`;
+      } else if (rpd <= disagreementThresholdPct) {
+        concordance = 'moderate';
+        comment = `Tier 2 Exploratory Agreement (RPD: ${rpd.toFixed(1)}% ≤ ${disagreementThresholdPct.toFixed(0)}% [study-defined criterion], |ΔEU| = ${absDiff.toFixed(4)}).`;
+      } else {
+        concordance = 'discordant';
+        comment = `Discordant (RPD: ${rpd.toFixed(1)}% > ${disagreementThresholdPct.toFixed(0)}%, |ΔEU| = ${absDiff.toFixed(4)}). Disagreement between clotting and enzyme rate — investigate matrix interference or reaction kinetics.`;
+      }
+    } else {
+      agreement = 'EXCLUDED';
+      concordance = 'non_quantifiable';
+      comment = `Excluded from quantitative comparison statistics: ${exclusionReason}.`;
+    }
+
+    comparisons.push({
+      id: `${c.id}_${matchedPo.id}`,
+      sampleId: (c.sampleId && c.sampleId.trim()) || (matchedPo.sampleId && matchedPo.sampleId.trim()) || '',
+      runId: c.runId || matchedPo.runId || 'Run 1',
+      name: c.name || matchedPo.name || key,
+      coagEu,
+      coagRawEu: c.rawEu,
+      coagAbs: c.abs,
+      coagStatus: c.status,
+      coagAnalyticalStatus: c.analyticalStatus,
+      poEu,
+      poRawEu: matchedPo.estimatedEu ?? NaN,
+      poRate: matchedPo.rate,
+      poStatus: matchedPo.status || 'PASS',
+      poAnalyticalStatus: matchedPo.analyticalStatus,
+      isEligibleForQuantitativeStats,
+      exclusionReason,
+      absDiff,
+      rpd,
+      ratio,
+      isLowConcentration,
+      lowConcentrationWarning,
+      agreement,
+      concordance,
+      comment,
+    });
   });
 
   return comparisons;

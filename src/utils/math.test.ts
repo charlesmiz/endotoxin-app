@@ -20,8 +20,22 @@ import {
   computeBlandAltman,
   computeDemingRegression,
   computeAgreementSummary,
+  getPairKey,
+  computePairingSummary,
 } from './math';
-import { CalibrationModelFit, KineticSampleRow, AssayComparisonItem } from '../types';
+import {
+  CalibrationModelFit,
+  KineticSampleRow,
+  AssayComparisonItem,
+  PoStandardRow,
+  EMPTY_PO_STANDARD_ROWS,
+  createBlankPoStandardRow,
+  EMPTY_CAL_ROWS,
+  EMPTY_COAG_SAMPLE_ROWS,
+  EMPTY_PO_SAMPLE_ROWS,
+  SampleRow,
+  PoSampleRow,
+} from '../types';
 
 describe('B. Data Validation & Replicates Handling', () => {
   it('parseReplicatesDetailed captures both valid numbers and invalid tokens', () => {
@@ -635,4 +649,311 @@ describe('J. Tone & Language Neutrality Constraints', () => {
     }
   });
 });
+
+describe('K. Phenoloxidase Standards Blank-by-Default & Calibration Verification', () => {
+  it('Initial PO standards state has no row with a non-empty standardEu', () => {
+    expect(EMPTY_PO_STANDARD_ROWS.length).toBe(2);
+    expect(EMPTY_PO_STANDARD_ROWS.every((r) => r.standardEu === '')).toBe(true);
+    expect(EMPTY_PO_STANDARD_ROWS.every((r) => r.name === '')).toBe(true);
+  });
+
+  it('Adding 5 rows leaves all new standardEu values as ""', () => {
+    const rows: PoStandardRow[] = [...EMPTY_PO_STANDARD_ROWS];
+    for (let i = 0; i < 5; i++) {
+      rows.push(createBlankPoStandardRow());
+    }
+    expect(rows.length).toBe(7);
+    expect(rows.every((r) => r.standardEu === '')).toBe(true);
+    expect(rows.every((r) => r.name === '')).toBe(true);
+  });
+
+  it('Feeding these 11 standards (EU 0..10 with direct rates 0.04, 0.0282, 0.0338, 0.031, 0.0327, 0.0345, 0.0346, 0.0353, 0.0456, 0.0593, 0.0484) to computeKineticRates gives slope 0.001930 and intercept 0.028841 (tolerance 1e-6) and 11 points used', () => {
+    const euValues = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const rates = [
+      0.04, 0.0282, 0.0338, 0.031, 0.0327, 0.0345, 0.0346, 0.0353, 0.0456,
+      0.0593, 0.0484,
+    ];
+    const standards: KineticSampleRow[] = euValues.map((eu, idx) => ({
+      id: `std_${idx}`,
+      sampleId: `STD_${idx + 1}`,
+      name: `Standard ${eu}`,
+      type: 'standard',
+      inputMode: 'direct_rate',
+      standardEu: String(eu),
+      directRate: String(rates[idx]),
+      readings: {},
+    }));
+
+    const { model } = computeKineticRates([], standards, 0.25);
+    expect(model).not.toBeNull();
+    expect(model!.points.length).toBe(11);
+    expect(model!.slope).toBeCloseTo(0.00193, 6);
+    expect(model!.intercept).toBeCloseTo(0.028841, 6);
+  });
+
+  it('A row with an empty EU is excluded and reported, not treated as 0', () => {
+    const euValues = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const rates = [
+      0.04, 0.0282, 0.0338, 0.031, 0.0327, 0.0345, 0.0346, 0.0353, 0.0456,
+      0.0593, 0.0484,
+    ];
+    const standards: KineticSampleRow[] = euValues.map((eu, idx) => ({
+      id: `std_${idx}`,
+      sampleId: `STD_${idx + 1}`,
+      name: `Standard ${eu}`,
+      type: 'standard',
+      inputMode: 'direct_rate',
+      standardEu: String(eu),
+      directRate: String(rates[idx]),
+      readings: {},
+    }));
+
+    const standardsWithEmpty: KineticSampleRow[] = [
+      ...standards,
+      {
+        id: 'std_empty',
+        sampleId: 'STD_EMPTY',
+        name: 'Empty EU Standard',
+        type: 'standard',
+        inputMode: 'direct_rate',
+        standardEu: '',
+        directRate: '0.0350',
+        readings: {},
+      },
+    ];
+
+    const { model, skippedRows } = computeKineticRates(
+      [],
+      standardsWithEmpty,
+      0.25
+    );
+    expect(model).not.toBeNull();
+    // Empty row must NOT be treated as 0 (which would affect fit or change points count to 12)
+    expect(model!.points.length).toBe(11);
+    expect(model!.slope).toBeCloseTo(0.00193, 6);
+    expect(model!.intercept).toBeCloseTo(0.028841, 6);
+    expect(skippedRows).toBeDefined();
+    expect(
+      skippedRows!.some((msg) => msg.includes('Row 12 ignored: EU empty'))
+    ).toBe(true);
+  });
+
+  it('Duplicate EU values produce a warning', () => {
+    const euValues = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const rates = [
+      0.04, 0.0282, 0.0338, 0.031, 0.0327, 0.0345, 0.0346, 0.0353, 0.0456,
+      0.0593, 0.0484,
+    ];
+    const standards: KineticSampleRow[] = euValues.map((eu, idx) => ({
+      id: `std_${idx}`,
+      sampleId: `STD_${idx + 1}`,
+      name: `Standard ${eu}`,
+      type: 'standard',
+      inputMode: 'direct_rate',
+      standardEu: String(eu),
+      directRate: String(rates[idx]),
+      readings: {},
+    }));
+
+    const standardsWithDup: KineticSampleRow[] = [
+      ...standards,
+      {
+        id: 'std_dup',
+        sampleId: 'STD_DUP',
+        name: 'Duplicate 2 EU Standard',
+        type: 'standard',
+        inputMode: 'direct_rate',
+        standardEu: '2',
+        directRate: '0.0340',
+        readings: {},
+      },
+    ];
+
+    const { model } = computeKineticRates([], standardsWithDup, 0.25);
+    expect(model).not.toBeNull();
+    expect(model!.duplicateEuWarnings).toBeDefined();
+    expect(model!.duplicateEuWarnings!.length).toBeGreaterThan(0);
+    expect(model!.duplicateEuWarnings![0]).toContain('Duplicate EU');
+    expect(model!.duplicateEuWarnings![0]).toContain('2');
+  });
+
+  it('Coagulation standards table, coagulation sample rows, and PO sample rows are blank by default', () => {
+    expect(EMPTY_CAL_ROWS.length).toBe(2);
+    expect(EMPTY_CAL_ROWS.every((r) => r.eu === '' && r.abs === '' && r.replicates === '')).toBe(true);
+
+    expect(EMPTY_COAG_SAMPLE_ROWS.length).toBe(2);
+    expect(
+      EMPTY_COAG_SAMPLE_ROWS.every(
+        (r) => r.sampleId === '' && r.name === '' && r.abs === '' && r.replicates === '' && r.dilutionFactor === ''
+      )
+    ).toBe(true);
+
+    expect(EMPTY_PO_SAMPLE_ROWS.length).toBe(2);
+    expect(
+      EMPTY_PO_SAMPLE_ROWS.every(
+        (r) => r.sampleId === '' && r.name === '' && r.directRate === '' && Object.keys(r.readings).length === 0
+      )
+    ).toBe(true);
+  });
+});
+
+describe('L. Cross-Assay Sample Pairing & computePairingSummary', () => {
+  it('getPairKey normalizes sample name and respects non-empty sampleId override', () => {
+    expect(getPairKey(undefined, 'normal Saline 11')).toBe('normal saline 11');
+    expect(getPairKey(undefined, 'Normal Saline 11')).toBe('normal saline 11');
+    expect(getPairKey('', 'Normal Saline 11')).toBe('normal saline 11');
+    expect(getPairKey(undefined, '5 % Dextrose')).toBe('5% dextrose');
+    expect(getPairKey(undefined, '5% Dextrose')).toBe('5% dextrose');
+    expect(getPairKey(undefined, 'Dextrose 5 %')).toBe('dextrose 5%');
+    expect(getPairKey(undefined, 'Dextrose 5%')).toBe('dextrose 5%');
+    expect(getPairKey(undefined, 'Control E+')).toBe('control e+');
+    expect(getPairKey(undefined, '  - Sample A - ')).toBe('sample a');
+    expect(getPairKey('OVR-1', 'Sample A')).toBe('ovr-1');
+    expect(getPairKey('', '')).toBe('');
+    expect(getPairKey(undefined, undefined)).toBe('');
+    expect(getPairKey('   ', '   ')).toBe('');
+  });
+
+  const dextroseSalineNames = [
+    'Dextrose 5% 1',
+    'Dextrose 5% 2',
+    'Dextrose 5% 3',
+    'Dextrose 5% 4',
+    'Normal Saline 1',
+    'Normal Saline 2',
+    'Normal Saline 3',
+    'Normal Saline 4',
+  ];
+
+  const buildCoag8 = (): SampleRow[] =>
+    dextroseSalineNames.map((name, i) => ({
+      id: `coag_${i + 1}`,
+      sampleId: '',
+      name,
+      abs: (0.05 + i * 0.02).toFixed(3),
+      replicates: '',
+    }));
+
+  const buildPo8 = (): PoSampleRow[] =>
+    dextroseSalineNames.map((name, i) => ({
+      id: `po_${i + 1}`,
+      sampleId: '',
+      name,
+      directRate: (0.01 + i * 0.005).toFixed(4),
+      readings: {},
+    }));
+
+  it('Coag rows: Control E+ and the 8 Dextrose / Saline samples. PO rows: the same 8 samples plus MET. There is NO MET row in coagulation. Expected: uniqueCount 10, pairedCount 8, coagOnly ["Control E+"], poOnly ["MET"]', () => {
+    const coagRows: SampleRow[] = [
+      { id: 'c_ctrl', sampleId: '', name: 'Control E+', abs: '0.450', replicates: '' },
+      ...buildCoag8(),
+    ];
+
+    const poRows: PoSampleRow[] = [
+      ...buildPo8(),
+      { id: 'p_met', sampleId: '', name: 'MET', directRate: '0.0350', readings: {} },
+    ];
+
+    const summary = computePairingSummary(coagRows, poRows);
+
+    expect(summary.uniqueCount).toBe(10);
+    expect(summary.pairedCount).toBe(8);
+    expect(summary.coagOnly.map((c) => c.name)).toEqual(['Control E+']);
+    expect(summary.poOnly.map((p) => p.name)).toEqual(['MET']);
+    expect(summary.enteredWithoutValue.length).toBe(0);
+  });
+
+  it('Adding a blank MET row (name only, no value) to coagulation must not change pairedCount or uniqueCount. MET must be reported as "entered without a value" in coagulation', () => {
+    const coagRows: SampleRow[] = [
+      { id: 'c_ctrl', sampleId: '', name: 'Control E+', abs: '0.450', replicates: '' },
+      ...buildCoag8(),
+      { id: 'c_met_blank', sampleId: '', name: 'MET', abs: '', replicates: '' }, // No value
+    ];
+
+    const poRows: PoSampleRow[] = [
+      ...buildPo8(),
+      { id: 'p_met', sampleId: '', name: 'MET', directRate: '0.0350', readings: {} },
+    ];
+
+    const summary = computePairingSummary(coagRows, poRows);
+
+    // Paired count and unique count must NOT change
+    expect(summary.uniqueCount).toBe(10);
+    expect(summary.pairedCount).toBe(8);
+    expect(summary.coagOnly.map((c) => c.name)).toEqual(['Control E+']);
+    expect(summary.poOnly.map((p) => p.name)).toEqual(['MET']);
+
+    // MET must be reported as entered without a value in coagulation
+    expect(summary.coagEnteredWithoutValue.map((c) => c.name)).toEqual(['MET']);
+    expect(summary.enteredWithoutValue.some((e) => e.name === 'MET' && e.assay === 'coagulation')).toBe(true);
+  });
+
+  it('Removing or adding a blank row must never change the result for the other samples', () => {
+    const coagBase: SampleRow[] = [
+      { id: 'c_ctrl', sampleId: '', name: 'Control E+', abs: '0.450', replicates: '' },
+      ...buildCoag8(),
+    ];
+    const poBase: PoSampleRow[] = [
+      ...buildPo8(),
+      { id: 'p_met', sampleId: '', name: 'MET', directRate: '0.0350', readings: {} },
+    ];
+
+    const baseSummary = computePairingSummary(coagBase, poBase);
+
+    // Add completely blank rows to both assays
+    const coagWithBlanks: SampleRow[] = [
+      ...coagBase,
+      { id: 'blank_1', sampleId: '', name: '', abs: '', replicates: '' },
+      { id: 'blank_2', sampleId: '   ', name: '  ', abs: '', replicates: '' },
+    ];
+    const poWithBlanks: PoSampleRow[] = [
+      { id: 'po_blank_1', sampleId: '', name: '', directRate: '', readings: {} },
+      ...poBase,
+      { id: 'po_blank_2', sampleId: '', name: '', directRate: '', readings: {} },
+    ];
+
+    const withBlanksSummary = computePairingSummary(coagWithBlanks, poWithBlanks);
+
+    expect(withBlanksSummary.uniqueCount).toBe(baseSummary.uniqueCount);
+    expect(withBlanksSummary.pairedCount).toBe(baseSummary.pairedCount);
+    expect(withBlanksSummary.coagOnly).toEqual(baseSummary.coagOnly);
+    expect(withBlanksSummary.poOnly).toEqual(baseSummary.poOnly);
+  });
+
+  it('Reversing the order of either list does not change the pairs', () => {
+    const coagRows: SampleRow[] = [
+      { id: 'c_ctrl', sampleId: '', name: 'Control E+', abs: '0.450', replicates: '' },
+      ...buildCoag8(),
+    ];
+    const poRows: PoSampleRow[] = [
+      ...buildPo8(),
+      { id: 'p_met', sampleId: '', name: 'MET', directRate: '0.0350', readings: {} },
+    ];
+
+    const forwardSummary = computePairingSummary(coagRows, poRows);
+    const reversedCoagSummary = computePairingSummary([...coagRows].reverse(), poRows);
+    const reversedPoSummary = computePairingSummary(coagRows, [...poRows].reverse());
+    const bothReversedSummary = computePairingSummary([...coagRows].reverse(), [...poRows].reverse());
+
+    expect(reversedCoagSummary.uniqueCount).toBe(forwardSummary.uniqueCount);
+    expect(reversedCoagSummary.pairedCount).toBe(forwardSummary.pairedCount);
+    expect(reversedPoSummary.pairedCount).toBe(forwardSummary.pairedCount);
+    expect(bothReversedSummary.pairedCount).toBe(forwardSummary.pairedCount);
+  });
+
+  it('A sample that exists only in PO must appear in the unpaired list even when the coagulation list is empty', () => {
+    const coagEmpty: SampleRow[] = [];
+    const poRows: PoSampleRow[] = [
+      { id: 'p_met', sampleId: '', name: 'MET', directRate: '0.0350', readings: {} },
+    ];
+
+    const summary = computePairingSummary(coagEmpty, poRows);
+
+    expect(summary.uniqueCount).toBe(1);
+    expect(summary.pairedCount).toBe(0);
+    expect(summary.coagOnly).toEqual([]);
+    expect(summary.poOnly.map((p) => p.name)).toEqual(['MET']);
+  });
+});
+
 

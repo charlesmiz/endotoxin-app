@@ -1,4 +1,12 @@
-import { SampleRow, SampleEstimateResult, CalibrationModelFit, KineticResult, KineticCalibrationModel, AssayComparisonItem } from '../types';
+import {
+  SampleRow,
+  SampleEstimateResult,
+  CalibrationModelFit,
+  KineticResult,
+  KineticCalibrationModel,
+  AssayComparisonItem,
+  PairingSummary,
+} from '../types';
 
 /**
  * RFC 4180-compliant CSV Parser.
@@ -460,6 +468,7 @@ export function formatKineticCsv(options: {
 export function formatComparisonCsv(options: {
   comparisons: AssayComparisonItem[];
   runLabel: string;
+  pairingSummary?: PairingSummary;
   experimentId?: string;
   coagWavelength?: number;
   poWavelength?: number;
@@ -468,6 +477,7 @@ export function formatComparisonCsv(options: {
   const {
     comparisons,
     runLabel,
+    pairingSummary,
     experimentId = 'EXP-AM-2026-001',
     coagWavelength = 540,
     poWavelength = 490,
@@ -484,6 +494,9 @@ export function formatComparisonCsv(options: {
   lines.push(`Analysis Timestamp,${escapeCsvCell(now)}`);
   lines.push(`Software Version,${escapeCsvCell(softwareVersion)}`);
   lines.push(`Assay Wavelengths (Record Metadata Only),Coagulation ${coagWavelength} nm | Phenoloxidase ${poWavelength} nm`);
+  if (pairingSummary) {
+    lines.push(`# Sample Pairing Summary,${pairingSummary.uniqueCount} unique samples: ${pairingSummary.pairedCount} paired, ${pairingSummary.coagOnly.length} coagulation-only, ${pairingSummary.poOnly.length} PO-only`);
+  }
   lines.push('');
 
   const headers = [

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CalibrationRow, CalibrationModelFit } from '../types';
+import { CalibrationRow, CalibrationModelFit, generateRowId } from '../types';
 import { summarizeReplicates, parseReplicates, mean } from '../utils/math';
 import { PlotlyChart } from './PlotlyChart';
 import {
@@ -52,11 +52,17 @@ export const StandardCurveTab: React.FC<StandardCurveTabProps> = ({
   const handleAddRow = () => {
     setRows((prev) => [
       ...prev,
-      { id: Math.random().toString(), eu: '', abs: '', replicates: '' },
+      { id: generateRowId('coag_std_'), eu: '', abs: '', replicates: '' },
     ]);
   };
 
   const handleRemoveRow = (id: string) => {
+    if (rows.length <= 1) {
+      setRows([
+        { id: generateRowId('coag_std_'), eu: '', abs: '', replicates: '' },
+      ]);
+      return;
+    }
     setRows((prev) => prev.filter((r) => r.id !== id));
   };
 

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { AssayComparisonItem } from '../types';
+import { AssayComparisonItem, PairingSummary } from '../types';
 import {
   computeAgreementSummary,
 } from '../utils/math';
@@ -21,12 +21,14 @@ import {
 
 interface DualAssayComparisonSectionProps {
   comparisons: AssayComparisonItem[];
+  pairingSummary?: PairingSummary;
   onDownloadCsv: () => void;
   isPrintView?: boolean;
 }
 
 export const DualAssayComparisonSection: React.FC<DualAssayComparisonSectionProps> = ({
   comparisons,
+  pairingSummary,
   onDownloadCsv,
   isPrintView = false,
 }) => {
@@ -230,6 +232,22 @@ export const DualAssayComparisonSection: React.FC<DualAssayComparisonSectionProp
               </p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Pairing Summary Banner */}
+      {pairingSummary && (
+        <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="font-semibold text-indigo-950 dark:text-indigo-200 flex items-center gap-2">
+            <GitCompare className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <span>
+              {pairingSummary.uniqueCount} unique samples: {pairingSummary.pairedCount} paired, {pairingSummary.coagOnly.length} coagulation-only, {pairingSummary.poOnly.length} PO-only
+              {pairingSummary.enteredWithoutValue.length > 0 ? `, ${pairingSummary.enteredWithoutValue.length} entered without a value` : ''}
+            </span>
+          </div>
+          <span className="text-[11px] text-slate-500 dark:text-slate-400">
+            Matched strictly by sample name (or optional Pair ID)
+          </span>
         </div>
       )}
 
