@@ -82,6 +82,24 @@ export const DualAssayComparisonSection: React.FC<DualAssayComparisonSectionProp
 
   return (
     <div className={`space-y-5 ${isPrintView ? 'avoid-break' : ''}`}>
+      {/* Diagnostic Only Banner */}
+      {(agreementSummary?.isDiagnosticOnly ||
+        blandAltman?.isDiagnosticOnly ||
+        comparisons.some(
+          (c) =>
+            c.isEligibleForQuantitativeStats &&
+            ((c.coagEu !== null && c.coagEu <= 0) ||
+              (c.poEu !== null && c.poEu <= 0) ||
+              c.coagAnalyticalStatus === 'BELOW_BLANK' ||
+              (c.poAnalyticalStatus && c.poAnalyticalStatus === 'BELOW_BLANK') ||
+              c.concordance === 'not_evaluable')
+        )) && (
+        <div className="p-3 bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 rounded-lg flex items-center gap-2 text-xs text-amber-900 dark:text-amber-100 font-bold">
+          <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>Diagnostic only: includes non-quantifiable (negative / below-blank) estimates. Do not interpret agreement statistics.</span>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
         <div>
@@ -335,6 +353,15 @@ export const DualAssayComparisonSection: React.FC<DualAssayComparisonSectionProp
             </div>
           )}
 
+          {blandAltman.hasNearConstantAxisWarning && (
+            <div className="p-2.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 rounded-lg flex items-start gap-2 text-xs text-blue-800 dark:text-blue-200">
+              <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <strong className="font-semibold">Near-Constant Method Axis:</strong> Pattern expected when one method is almost constant; it does not by itself indicate proportional bias.
+              </div>
+            </div>
+          )}
+
           {blandAltman.hasHeteroscedasticityWarning && (
             <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-lg flex items-start gap-2 text-xs text-amber-800 dark:text-amber-200">
               <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
@@ -532,38 +559,44 @@ export const DualAssayComparisonSection: React.FC<DualAssayComparisonSectionProp
                     )}
                   </td>
                   <td className="px-3 py-2.5 text-center font-mono">
-                    {item.coagEu !== null && Number.isFinite(item.coagEu) ? (
-                      <span className="font-bold text-slate-900 dark:text-slate-100">
-                        {item.coagEu.toFixed(3)}
-                      </span>
-                    ) : (
-                      <span className="text-amber-700 dark:text-amber-400 font-semibold text-[11px]">
-                        {item.coagStatus || '< LOD'}
-                      </span>
-                    )}
+                    <span className={`font-bold ${((item.coagEu !== null && item.coagEu < 0) || (Number.isFinite(item.coagRawEu) && item.coagRawEu < 0)) ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                      {item.coagEu !== null && Number.isFinite(item.coagEu)
+                        ? item.coagEu.toFixed(3)
+                        : Number.isFinite(item.coagRawEu)
+                        ? item.coagRawEu.toFixed(3)
+                        : '—'}
+                    </span>
                     <span className="text-[10px] text-slate-400 dark:text-slate-500 block">
                       ({Number.isFinite(item.coagAbs) ? item.coagAbs.toFixed(3) : '—'} OD)
                     </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-center font-mono">
-                    {item.poEu !== null && Number.isFinite(item.poEu) ? (
-                      <span className="font-bold text-indigo-700 dark:text-indigo-400">
-                        {item.poEu.toFixed(3)}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 dark:text-slate-500 font-semibold text-[11px]">
-                        {item.poStatus || 'N/A'}
+                    {item.coagAnalyticalStatus !== 'WITHIN_RANGE' && (
+                      <span className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold block">
+                        {item.coagAnalyticalStatus === 'BELOW_BLANK' ? 'Below blank (< LOD)' : item.coagStatus || item.coagAnalyticalStatus}
                       </span>
                     )}
+                  </td>
+                  <td className="px-3 py-2.5 text-center font-mono">
+                    <span className={`font-bold ${((item.poEu !== null && item.poEu < 0) || (Number.isFinite(item.poRawEu) && item.poRawEu < 0)) ? 'text-rose-600 dark:text-rose-400' : 'text-indigo-700 dark:text-indigo-400'}`}>
+                      {item.poEu !== null && Number.isFinite(item.poEu)
+                        ? item.poEu.toFixed(3)
+                        : Number.isFinite(item.poRawEu)
+                        ? item.poRawEu.toFixed(3)
+                        : '—'}
+                    </span>
                     <span className="text-[10px] text-slate-400 dark:text-slate-500 block">
                       ({Number.isFinite(item.poRate) ? item.poRate.toFixed(4) : '—'}/min)
                     </span>
+                    {item.poAnalyticalStatus && item.poAnalyticalStatus !== 'WITHIN_RANGE' && (
+                      <span className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold block">
+                        {item.poAnalyticalStatus === 'BELOW_BLANK' ? 'Below blank (< LOD)' : item.poStatus || item.poAnalyticalStatus}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2.5 text-center font-mono font-bold text-slate-800 dark:text-slate-200">
                     {item.absDiff !== null && Number.isFinite(item.absDiff) ? item.absDiff.toFixed(4) : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-center font-mono font-bold">
-                    {item.rpd !== null && Number.isFinite(item.rpd) ? (
+                    {item.rpd !== null && Number.isFinite(item.rpd) && !isExcluded ? (
                       <span
                         className={
                           isHigh
@@ -576,7 +609,7 @@ export const DualAssayComparisonSection: React.FC<DualAssayComparisonSectionProp
                         {item.rpd.toFixed(1)}%
                       </span>
                     ) : (
-                      <span className="text-slate-400 font-normal">—</span>
+                      <span className="text-slate-500 font-mono text-xs font-semibold">n/e</span>
                     )}
                   </td>
                   <td className="px-3 py-2.5 text-center font-mono text-slate-500 dark:text-slate-400 text-[11px]">

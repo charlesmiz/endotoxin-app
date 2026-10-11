@@ -516,10 +516,20 @@ export function formatComparisonCsv(options: {
   lines.push(headers.map(escapeCsvCell).join(','));
 
   comparisons.forEach((c) => {
-    const coagStr = c.coagEu !== null ? c.coagEu.toFixed(4) : '';
-    const poStr = c.poEu !== null ? c.poEu.toFixed(4) : '';
+    const coagStr =
+      c.coagEu !== null
+        ? c.coagEu.toFixed(4)
+        : Number.isFinite(c.coagRawEu)
+        ? c.coagRawEu.toFixed(4)
+        : '';
+    const poStr =
+      c.poEu !== null
+        ? c.poEu.toFixed(4)
+        : Number.isFinite(c.poRawEu)
+        ? c.poRawEu.toFixed(4)
+        : '';
     const diffStr = c.absDiff !== null ? c.absDiff.toFixed(4) : '';
-    const rpdStr = c.rpd !== null ? c.rpd.toFixed(2) : '';
+    const rpdStr = c.rpd !== null ? c.rpd.toFixed(2) : 'n/e';
     const ratioStr = c.ratio !== null ? c.ratio.toFixed(3) : '';
     const eligibilityStr = c.isEligibleForQuantitativeStats ? 'ELIGIBLE' : 'EXCLUDED';
 

@@ -105,6 +105,10 @@ export const MethodAgreementCharts: React.FC<MethodAgreementChartsProps> = ({
                 ? isDark
                   ? '#fbbf24'
                   : '#d97706'
+                : c.concordance === 'not_evaluable'
+                ? isDark
+                  ? '#94a3b8'
+                  : '#64748b'
                 : isDark
                 ? '#f87171'
                 : '#dc2626'
@@ -266,7 +270,9 @@ export const MethodAgreementCharts: React.FC<MethodAgreementChartsProps> = ({
             x: [0, xMax],
             y: [blandAltman.trendIntercept, blandAltman.trendSlope * xMax + blandAltman.trendIntercept],
             mode: 'lines',
-            name: `Proportional Bias Trend (p=${blandAltman.trendPValue.toFixed(3)})`,
+            name: blandAltman.hasNearConstantAxisWarning
+              ? `Trend (Near-Constant Axis, p=${blandAltman.trendPValue.toFixed(3)})`
+              : `Proportional Bias Trend (p=${blandAltman.trendPValue.toFixed(3)})`,
             line: {
               color: isDark ? '#f59e0b' : '#d97706',
               width: 1.5,

@@ -52,6 +52,9 @@ export function generateAnalyticalInterpretation(data: AnalyticalSummaryInput): 
   const discordantSamples = comparisons.filter(
     (c) => c.concordance === 'discordant' || (Number.isFinite(c.rpd) && c.rpd > 30)
   );
+  const notEvaluableSamples = comparisons.filter(
+    (c) => c.concordance === 'not_evaluable' || c.concordance === 'non_quantifiable'
+  );
   const highConcordanceSamples = comparisons.filter(
     (c) => c.concordance === 'high' || (Number.isFinite(c.rpd) && c.rpd <= 15)
   );
@@ -86,6 +89,11 @@ export function generateAnalyticalInterpretation(data: AnalyticalSummaryInput): 
   // 3. Dual-Assay Concordance & Analytical Consequence
   lines.push('### ⚖️ Exploratory Method Comparison & Agreement');
   if (comparisons.length > 0) {
+    if (notEvaluableSamples.length > 0) {
+      lines.push(
+        `- **Non-Quantifiable / Excluded Pairs (${notEvaluableSamples.length}):** ${notEvaluableSamples.map((d) => `*${d.name}*`).join(', ')}. Classified as not evaluable due to non-quantifiable status (below blank, negative extrapolation, or pair mean below low-concentration baseline). Arithmetic differences remain inspectable, but agreement statistics are excluded.`
+      );
+    }
     if (discordantSamples.length > 0) {
       lines.push(
         `- **Analytical Divergence Observed (${discordantSamples.length} discordant sample(s)):** ${discordantSamples.map((d) => `*${d.name}* (RPD: ${d.rpd.toFixed(1)}%)`).join(', ')}. Differences between turbidimetric coagulation and kinetic velocity may reflect matrix background absorbance, non-parallel slopes, or localized reaction rates. Follow-up dilution re-testing is recommended.`

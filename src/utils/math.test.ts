@@ -35,6 +35,8 @@ import {
   EMPTY_PO_SAMPLE_ROWS,
   SampleRow,
   PoSampleRow,
+  SampleEstimateResult,
+  KineticResult,
 } from '../types';
 
 describe('B. Data Validation & Replicates Handling', () => {
@@ -953,6 +955,295 @@ describe('L. Cross-Assay Sample Pairing & computePairingSummary', () => {
     expect(summary.pairedCount).toBe(0);
     expect(summary.coagOnly).toEqual([]);
     expect(summary.poOnly.map((p) => p.name)).toEqual(['MET']);
+  });
+
+  describe('L. Concordance Guard, Raw Numeric Estimates & Method Comparison Warnings', () => {
+    it('A pair with coag = -5.946 and PO = 4.122 is not_evaluable (not Tier 1), agreement is EXCLUDED, and RPD is not 0', () => {
+      const coagResults: SampleEstimateResult[] = [
+        {
+          id: 'coag_neg_1',
+          sampleId: '',
+          runId: 'Run 1',
+          name: 'Sample Negative Coag',
+          abs: 0.001,
+          sd: NaN,
+          cv: NaN,
+          n: 1,
+          replicates: [],
+          invalidTokens: [],
+          rawEu: -5.946,
+          eu: -5.946,
+          reportedEu: null,
+          dilutionFactor: 1,
+          originalConcentration: null,
+          reportableText: '< LOD (< 0.0050 OD blank)',
+          analyticalStatus: 'BELOW_BLANK',
+          compliance: 'PASS',
+          status: 'PASS',
+          remark: 'Below analytical blank',
+          outOfRange: false,
+          invalidInput: false,
+          negativeEstimate: true,
+          ambiguous: false,
+          noSolution: false,
+        },
+      ];
+
+      const poResults: KineticResult[] = [
+        {
+          id: 'po_pos_1',
+          sampleId: '',
+          runId: 'Run 1',
+          name: 'Sample Negative Coag',
+          type: 'sample',
+          inputMode: 'direct_rate',
+          timePoints: [],
+          absReadings: [],
+          rate: 0.035,
+          rateSource: 'direct_input',
+          r2: NaN,
+          deltaAbs: NaN,
+          initialAbs: NaN,
+          finalAbs: NaN,
+          estimatedEu: 4.122,
+          reportedEu: 4.122,
+          reportableText: '4.122 EU/mL',
+          analyticalStatus: 'WITHIN_RANGE',
+          compliance: 'PASS',
+          status: 'PASS',
+          activityLevel: 'active',
+          activityThresholdType: 'exploratory_reference',
+          remark: '',
+          valid: true,
+        },
+      ];
+
+      const comparisons = computeAssayComparison(coagResults, poResults, 20.0, 'Run 1');
+      expect(comparisons).toHaveLength(1);
+      const item = comparisons[0];
+
+      // Concordance guard must trigger:
+      expect(item.concordance).toBe('not_evaluable');
+      expect(item.concordance).not.toBe('high');
+      expect(item.concordance).not.toBe('moderate');
+      expect(item.agreement).toBe('EXCLUDED');
+
+      // RPD must NOT be 0 (must be null so it displays as "n/e")
+      expect(item.rpd).not.toBe(0);
+      expect(item.rpd).toBeNull();
+
+      // Raw arithmetic values must remain visible
+      expect(item.coagRawEu).toBeCloseTo(-5.946, 3);
+      expect(item.poRawEu).toBeCloseTo(4.122, 3);
+      expect(item.absDiff).toBeCloseTo(Math.abs(-5.946 - 4.122), 3);
+      expect(item.isEligibleForQuantitativeStats).toBe(false);
+    });
+
+    it('A pair with both estimates positive and within 15% RPD is Tier 1 (concordance high)', () => {
+      const coagResults: SampleEstimateResult[] = [
+        {
+          id: 'coag_pos_1',
+          sampleId: 'SMP-T1',
+          runId: 'Run 1',
+          name: 'Sample Concordant',
+          abs: 0.150,
+          sd: NaN,
+          cv: NaN,
+          n: 1,
+          replicates: [],
+          invalidTokens: [],
+          rawEu: 2.000,
+          eu: 2.000,
+          reportedEu: 2.000,
+          dilutionFactor: 1,
+          originalConcentration: 2.000,
+          reportableText: '2.000 EU/mL',
+          analyticalStatus: 'WITHIN_RANGE',
+          compliance: 'PASS',
+          status: 'PASS',
+          remark: '',
+          outOfRange: false,
+          invalidInput: false,
+          negativeEstimate: false,
+          ambiguous: false,
+          noSolution: false,
+        },
+      ];
+
+      const poResults: KineticResult[] = [
+        {
+          id: 'po_pos_1',
+          sampleId: 'SMP-T1',
+          runId: 'Run 1',
+          name: 'Sample Concordant',
+          type: 'sample',
+          inputMode: 'direct_rate',
+          timePoints: [],
+          absReadings: [],
+          rate: 0.020,
+          rateSource: 'direct_input',
+          r2: NaN,
+          deltaAbs: NaN,
+          initialAbs: NaN,
+          finalAbs: NaN,
+          estimatedEu: 2.100,
+          reportedEu: 2.100,
+          reportableText: '2.100 EU/mL',
+          analyticalStatus: 'WITHIN_RANGE',
+          compliance: 'PASS',
+          status: 'PASS',
+          activityLevel: 'active',
+          activityThresholdType: 'exploratory_reference',
+          remark: '',
+          valid: true,
+        },
+      ];
+
+      const comparisons = computeAssayComparison(coagResults, poResults, 20.0, 'Run 1', 15.0);
+      expect(comparisons).toHaveLength(1);
+      const item = comparisons[0];
+
+      expect(item.concordance).toBe('high');
+      expect(item.agreement).toBe('AGREE');
+      expect(item.isEligibleForQuantitativeStats).toBe(true);
+      expect(item.rpd).toBeCloseTo((Math.abs(2.0 - 2.1) / 2.05) * 100, 2);
+      expect(item.rpd!).toBeLessThanOrEqual(15.0);
+    });
+
+    it('Raw negative estimates appear in estimate report data and are not erased by words "below blank"', () => {
+      const coagResults: SampleEstimateResult[] = [
+        {
+          id: 'coag_neg_2',
+          sampleId: 'SMP-RAW',
+          runId: 'Run 1',
+          name: 'Sample Below Blank Raw',
+          abs: 0.001,
+          sd: NaN,
+          cv: NaN,
+          n: 1,
+          replicates: [],
+          invalidTokens: [],
+          rawEu: -5.946,
+          eu: -5.946,
+          reportedEu: null,
+          dilutionFactor: 1,
+          originalConcentration: null,
+          reportableText: '< LOD (< 0.0050 OD blank)',
+          analyticalStatus: 'BELOW_BLANK',
+          compliance: 'PASS',
+          status: 'PASS',
+          remark: 'Below analytical blank',
+          outOfRange: false,
+          invalidInput: false,
+          negativeEstimate: true,
+          ambiguous: false,
+          noSolution: false,
+        },
+      ];
+
+      expect(coagResults[0].rawEu).toBe(-5.946);
+      expect(Number.isFinite(coagResults[0].rawEu)).toBe(true);
+    });
+
+    it('Bland-Altman triggers near-constant axis warning when slope of differences on means is close to -2 with |r| > 0.95', () => {
+      // When method 1 (coag) is constant e.g. 1.0 EU/mL, and method 2 (po) varies [2, 4, 6, 8, 10]:
+      // mean = (1 + y)/2, diff = 1 - y = 2 - 2 * mean -> slope of diff on mean is -2.0 exactly!
+      const poValues = [2.0, 4.0, 6.0, 8.0, 10.0];
+      const items: AssayComparisonItem[] = poValues.map((po, idx) => ({
+        id: `ba_const_${idx}`,
+        sampleId: `S${idx + 1}`,
+        runId: 'Run 1',
+        name: `Const Test ${idx + 1}`,
+        coagEu: 1.0,
+        coagRawEu: 1.0,
+        coagAbs: 0.1,
+        coagStatus: 'VALID',
+        coagAnalyticalStatus: 'WITHIN_RANGE',
+        poEu: po,
+        poRawEu: po,
+        poRate: 0.02 * idx,
+        poStatus: 'VALID',
+        poAnalyticalStatus: 'WITHIN_RANGE',
+        rpd: (Math.abs(1.0 - po) / ((1.0 + po) / 2)) * 100,
+        absDiff: Math.abs(1.0 - po),
+        ratio: 1.0 / po,
+        concordance: 'discordant',
+        agreement: 'DISAGREE',
+        comment: '',
+        isEligibleForQuantitativeStats: true,
+        isLowConcentration: false,
+      }));
+
+      const ba = computeBlandAltman(items);
+      expect(ba).not.toBeNull();
+      expect(ba?.trendSlope).toBeCloseTo(-2.0, 2);
+      expect(Math.abs(ba!.trendR)).toBeGreaterThan(0.95);
+      expect(ba?.hasNearConstantAxisWarning).toBe(true);
+      expect(ba?.nearConstantAxisWarning).toContain('Pattern expected when one method is almost constant');
+    });
+
+    it('Diagnostic mode banner is flagged when pairs entering agreement summary contain non-quantifiable estimates', () => {
+      const items: AssayComparisonItem[] = [
+        {
+          id: 'diag_1',
+          sampleId: 'D1',
+          runId: 'Run 1',
+          name: 'Sample Negative Included',
+          coagEu: -5.946,
+          coagRawEu: -5.946,
+          coagAbs: 0.001,
+          coagStatus: 'PASS',
+          coagAnalyticalStatus: 'BELOW_BLANK',
+          poEu: 4.122,
+          poRawEu: 4.122,
+          poRate: 0.04,
+          poStatus: 'PASS',
+          poAnalyticalStatus: 'WITHIN_RANGE',
+          rpd: null,
+          absDiff: 10.068,
+          ratio: null,
+          concordance: 'not_evaluable',
+          agreement: 'EXCLUDED',
+          comment: 'Excluded',
+          isEligibleForQuantitativeStats: true, // forced into stats for diagnostic analysis
+          isLowConcentration: false,
+        },
+        {
+          id: 'diag_2',
+          sampleId: 'D2',
+          runId: 'Run 1',
+          name: 'Sample 2',
+          coagEu: 2.0,
+          coagRawEu: 2.0,
+          coagAbs: 0.2,
+          coagStatus: 'PASS',
+          coagAnalyticalStatus: 'WITHIN_RANGE',
+          poEu: 2.1,
+          poRawEu: 2.1,
+          poRate: 0.02,
+          poStatus: 'PASS',
+          poAnalyticalStatus: 'WITHIN_RANGE',
+          rpd: 4.88,
+          absDiff: 0.1,
+          ratio: 2.0 / 2.1,
+          concordance: 'high',
+          agreement: 'AGREE',
+          comment: '',
+          isEligibleForQuantitativeStats: true,
+          isLowConcentration: false,
+        },
+      ];
+
+      const ba = computeBlandAltman(items);
+      expect(ba).not.toBeNull();
+      expect(ba?.isDiagnosticOnly).toBe(true);
+      expect(ba?.diagnosticWarning).toContain('Diagnostic only: includes non-quantifiable (negative / below-blank) estimates');
+
+      const summary = computeAgreementSummary(items);
+      expect(summary).not.toBeNull();
+      expect(summary?.isDiagnosticOnly).toBe(true);
+      expect(summary?.diagnosticWarning).toContain('Diagnostic only: includes non-quantifiable (negative / below-blank) estimates');
+    });
   });
 });
 

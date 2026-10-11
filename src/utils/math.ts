@@ -1574,67 +1574,96 @@ export function computeAssayComparison(
     const matchedPo = poByKey.get(key);
     if (!matchedPo) return;
 
+    const coagRawVal =
+      Number.isFinite(c.rawEu)
+        ? c.rawEu * (c.dilutionFactor || 1)
+        : (c.reportedEu !== null && Number.isFinite(c.reportedEu)
+            ? c.reportedEu * (c.dilutionFactor || 1)
+            : (Number.isFinite(c.eu) ? c.eu * (c.dilutionFactor || 1) : NaN));
+
+    const poRawVal =
+      Number.isFinite(matchedPo.estimatedEu)
+        ? matchedPo.estimatedEu
+        : (matchedPo.reportedEu !== null && matchedPo.reportedEu !== undefined && Number.isFinite(matchedPo.reportedEu)
+            ? matchedPo.reportedEu
+            : NaN);
+
+    // Quantifiability checks
     const isCoagQuantifiable =
       c.analyticalStatus === 'WITHIN_RANGE' &&
-      c.reportedEu !== null &&
-      Number.isFinite(c.reportedEu);
+      Number.isFinite(coagRawVal) &&
+      coagRawVal > 0;
 
     const isPoQuantifiable =
       matchedPo.analyticalStatus === 'WITHIN_RANGE' &&
-      matchedPo.reportedEu !== null &&
-      matchedPo.reportedEu !== undefined &&
-      Number.isFinite(matchedPo.reportedEu);
+      Number.isFinite(poRawVal) &&
+      poRawVal > 0;
 
-    const isEligibleForQuantitativeStats =
-      isCoagQuantifiable && isPoQuantifiable;
+    const pairMean =
+      Number.isFinite(coagRawVal) && Number.isFinite(poRawVal)
+        ? (coagRawVal + poRawVal) / 2
+        : NaN;
+    const isPairMeanBelowLowConc =
+      Number.isFinite(pairMean) && pairMean < lowConcThresholdEu;
+
+    // Concordance guard:
+    // If either estimate is <= 0, or either is below blank / outside the calibrated range,
+    // or the pair mean is below the low-concentration threshold, then set concordance = 'not_evaluable' and agreement = 'EXCLUDED'.
+    // Never assign Tier 1 or Tier 2 to such a pair, and never set RPD to 0. Show RPD as "n/e" and still show the raw coag EU, raw PO EU and |ΔEU| so the arithmetic is visible.
+    const passesConcordanceGuard =
+      isCoagQuantifiable && isPoQuantifiable && !isPairMeanBelowLowConc;
+
+    const isEligibleForQuantitativeStats = passesConcordanceGuard;
 
     let exclusionReason: string | undefined;
-    if (!isCoagQuantifiable) {
-      exclusionReason = `Coagulation: ${c.reportableText || c.analyticalStatus}`;
-    } else if (!isPoQuantifiable) {
-      exclusionReason = `Phenoloxidase: ${matchedPo.reportableText || matchedPo.analyticalStatus || 'Not quantifiable'}`;
+    if (!Number.isFinite(coagRawVal) || coagRawVal <= 0 || !Number.isFinite(poRawVal) || poRawVal <= 0) {
+      exclusionReason = `Non-positive estimate (Coag: ${Number.isFinite(coagRawVal) ? coagRawVal.toFixed(3) : 'NaN'}, PO: ${Number.isFinite(poRawVal) ? poRawVal.toFixed(3) : 'NaN'} EU/mL; negative extrapolation not quantifiable)`;
+    } else if (c.analyticalStatus !== 'WITHIN_RANGE' || matchedPo.analyticalStatus !== 'WITHIN_RANGE') {
+      exclusionReason = `Below blank or outside calibrated range (Coag: ${c.reportableText || c.analyticalStatus}, PO: ${matchedPo.reportableText || matchedPo.analyticalStatus || 'Not quantifiable'})`;
+    } else if (isPairMeanBelowLowConc) {
+      exclusionReason = `Pair mean (${pairMean.toFixed(3)} EU/mL) below low-concentration threshold (${lowConcThresholdEu.toFixed(3)} EU/mL)`;
     }
 
-    let coagEu: number | null = null;
-    let poEu: number | null = null;
-    let absDiff: number | null = null;
+    let coagEu: number | null = Number.isFinite(coagRawVal) ? coagRawVal : null;
+    let poEu: number | null = Number.isFinite(poRawVal) ? poRawVal : null;
+    let absDiff: number | null =
+      Number.isFinite(coagRawVal) && Number.isFinite(poRawVal)
+        ? Math.abs(coagRawVal - poRawVal)
+        : null;
     let rpd: number | null = null;
     let ratio: number | null = null;
     let isLowConcentration = false;
     let lowConcentrationWarning: string | undefined;
     let agreement: 'AGREE' | 'DISAGREE' | 'EXCLUDED' = 'EXCLUDED';
-    let concordance: 'high' | 'moderate' | 'discordant' | 'non_quantifiable' =
-      'non_quantifiable';
+    let concordance: 'high' | 'moderate' | 'discordant' | 'not_evaluable' | 'non_quantifiable' =
+      'not_evaluable';
     let comment = '';
 
-    if (isEligibleForQuantitativeStats) {
-      coagEu = c.reportedEu! * c.dilutionFactor;
-      poEu = matchedPo.reportedEu!;
-      absDiff = Math.abs(coagEu - poEu);
-      const avg = (coagEu + poEu) / 2;
-      rpd = avg > 0 ? (absDiff / avg) * 100 : 0;
-      ratio = poEu > 0 ? coagEu / poEu : null;
+    if (passesConcordanceGuard) {
+      const avg = pairMean;
+      rpd = (absDiff! / avg) * 100;
+      ratio = poEu! > 0 ? coagEu! / poEu! : null;
 
       if (avg < lowConcThresholdEu) {
         isLowConcentration = true;
-        lowConcentrationWarning = `Low concentration (< ${lowConcThresholdEu.toFixed(3)} EU/mL): RPD is mathematically amplified by baseline optical noise. Prioritize absolute difference |ΔEU| = ${absDiff.toFixed(4)} EU/mL.`;
+        lowConcentrationWarning = `Low concentration (< ${lowConcThresholdEu.toFixed(3)} EU/mL): RPD is mathematically amplified by baseline optical noise. Prioritize absolute difference |ΔEU| = ${absDiff!.toFixed(4)} EU/mL.`;
       }
 
       agreement = rpd <= disagreementThresholdPct ? 'AGREE' : 'DISAGREE';
 
       if (rpd <= tier1RpdPct) {
         concordance = 'high';
-        comment = `Tier 1 Exploratory Agreement (RPD: ${rpd.toFixed(1)}% ≤ ${tier1RpdPct}% [study-defined criterion], |ΔEU| = ${absDiff.toFixed(4)}).`;
+        comment = `Tier 1 Exploratory Agreement (RPD: ${rpd.toFixed(1)}% ≤ ${tier1RpdPct}% [study-defined criterion], |ΔEU| = ${absDiff!.toFixed(4)}).`;
       } else if (rpd <= disagreementThresholdPct) {
         concordance = 'moderate';
-        comment = `Tier 2 Exploratory Agreement (RPD: ${rpd.toFixed(1)}% ≤ ${disagreementThresholdPct.toFixed(0)}% [study-defined criterion], |ΔEU| = ${absDiff.toFixed(4)}).`;
+        comment = `Tier 2 Exploratory Agreement (RPD: ${rpd.toFixed(1)}% ≤ ${disagreementThresholdPct.toFixed(0)}% [study-defined criterion], |ΔEU| = ${absDiff!.toFixed(4)}).`;
       } else {
         concordance = 'discordant';
-        comment = `Discordant (RPD: ${rpd.toFixed(1)}% > ${disagreementThresholdPct.toFixed(0)}%, |ΔEU| = ${absDiff.toFixed(4)}). Disagreement between clotting and enzyme rate — investigate matrix interference or reaction kinetics.`;
+        comment = `Discordant (RPD: ${rpd.toFixed(1)}% > ${disagreementThresholdPct.toFixed(0)}%, |ΔEU| = ${absDiff!.toFixed(4)}). Disagreement between clotting and enzyme rate — investigate matrix interference or reaction kinetics.`;
       }
     } else {
       agreement = 'EXCLUDED';
-      concordance = 'non_quantifiable';
+      concordance = 'not_evaluable';
       comment = `Excluded from quantitative comparison statistics: ${exclusionReason}.`;
     }
 
@@ -1644,12 +1673,12 @@ export function computeAssayComparison(
       runId: c.runId || matchedPo.runId || 'Run 1',
       name: c.name || matchedPo.name || key,
       coagEu,
-      coagRawEu: c.rawEu,
+      coagRawEu: Number.isFinite(c.rawEu) ? c.rawEu : coagRawVal,
       coagAbs: c.abs,
       coagStatus: c.status,
       coagAnalyticalStatus: c.analyticalStatus,
       poEu,
-      poRawEu: matchedPo.estimatedEu ?? NaN,
+      poRawEu: Number.isFinite(matchedPo.estimatedEu) ? matchedPo.estimatedEu : poRawVal,
       poRate: matchedPo.rate,
       poStatus: matchedPo.status || 'PASS',
       poAnalyticalStatus: matchedPo.analyticalStatus,
@@ -1768,6 +1797,28 @@ export function computeBlandAltman(
   const hasProportionalBiasWarning =
     Math.abs(trendR) >= 0.3 && trendPValue < 0.05;
 
+  const hasNearConstantAxisWarning =
+    trendSlope >= -2.2 && trendSlope <= -1.8 && Math.abs(trendR) > 0.95;
+  const nearConstantAxisWarning = hasNearConstantAxisWarning
+    ? 'Pattern expected when one method is almost constant; it does not by itself indicate proportional bias.'
+    : undefined;
+
+  const hasNonQuantifiable = valid.some(
+    (c) =>
+      (c.coagEu !== null && c.coagEu <= 0) ||
+      (c.poEu !== null && c.poEu <= 0) ||
+      (Number.isFinite(c.coagRawEu) && c.coagRawEu <= 0) ||
+      (Number.isFinite(c.poRawEu) && c.poRawEu <= 0) ||
+      c.coagAnalyticalStatus === 'BELOW_BLANK' ||
+      (c.poAnalyticalStatus && c.poAnalyticalStatus === 'BELOW_BLANK') ||
+      c.concordance === 'not_evaluable' ||
+      c.concordance === 'non_quantifiable'
+  );
+  const isDiagnosticOnly = hasNonQuantifiable;
+  const diagnosticWarning = hasNonQuantifiable
+    ? 'Diagnostic only: includes non-quantifiable (negative / below-blank) estimates. Do not interpret agreement statistics.'
+    : undefined;
+
   // Diagnostics: Heteroscedasticity (magnitude of difference vs mean)
   let heteroscedasticityR = 0;
   let heteroscedasticityPValue = 1.0;
@@ -1834,6 +1885,10 @@ export function computeBlandAltman(
     trendR,
     trendPValue,
     hasProportionalBiasWarning,
+    hasNearConstantAxisWarning,
+    nearConstantAxisWarning,
+    isDiagnosticOnly,
+    diagnosticWarning,
     heteroscedasticityR,
     heteroscedasticityPValue,
     hasHeteroscedasticityWarning,
@@ -2024,6 +2079,23 @@ export function computeAgreementSummary(
     statement += ` Note: ${lowConcCount} sample(s) have concentrations near baseline (< ${lowConcCutoff.toFixed(3)} EU/mL), where RPD is mathematically amplified by baseline division; absolute differences should be consulted alongside percentage metrics.`;
   }
 
+  const isDiagnosticOnly =
+    Boolean(ba.isDiagnosticOnly) ||
+    eligible.some(
+      (c) =>
+        (c.coagEu !== null && c.coagEu <= 0) ||
+        (c.poEu !== null && c.poEu <= 0) ||
+        (Number.isFinite(c.coagRawEu) && c.coagRawEu <= 0) ||
+        (Number.isFinite(c.poRawEu) && c.poRawEu <= 0) ||
+        c.coagAnalyticalStatus === 'BELOW_BLANK' ||
+        (c.poAnalyticalStatus && c.poAnalyticalStatus === 'BELOW_BLANK') ||
+        c.concordance === 'not_evaluable' ||
+        c.concordance === 'non_quantifiable'
+    );
+  const diagnosticWarning = isDiagnosticOnly
+    ? 'Diagnostic only: includes non-quantifiable (negative / below-blank) estimates. Do not interpret agreement statistics.'
+    : undefined;
+
   return {
     blandAltman: ba,
     deming: deming || undefined,
@@ -2032,5 +2104,7 @@ export function computeAgreementSummary(
     exploratoryRpdTier2,
     lowConcentrationCutoff: lowConcCutoff,
     concordanceStatement: statement,
+    isDiagnosticOnly,
+    diagnosticWarning,
   };
 }

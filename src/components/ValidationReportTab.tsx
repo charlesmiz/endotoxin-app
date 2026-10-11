@@ -758,18 +758,25 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
                       </tr>
                     ) : (
                       results.map((r, i) => {
+                        const rawNumericVal = Number.isFinite(r.rawEu)
+                          ? r.rawEu * (r.dilutionFactor || 1)
+                          : Number.isFinite(r.eu)
+                          ? r.eu * (r.dilutionFactor || 1)
+                          : NaN;
                         const isAbove =
-                          Number.isFinite(r.eu) && r.eu >= threshold;
+                          Number.isFinite(rawNumericVal) && rawNumericVal >= threshold;
                         const statusText = r.invalidInput
                           ? 'Invalid input'
                           : r.noSolution
                           ? 'No solution'
                           : r.ambiguous
                           ? 'Ambiguous roots'
-                          : r.outOfRange
-                          ? 'Extrapolated'
+                          : r.analyticalStatus === 'BELOW_BLANK'
+                          ? 'Below blank (< LOD)'
                           : r.negativeEstimate
-                          ? 'Negative'
+                          ? 'Negative extrapolation'
+                          : r.outOfRange
+                          ? 'Extrapolated (> range)'
                           : isAbove
                           ? 'Above threshold'
                           : 'Within range';
@@ -780,9 +787,9 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
                               {r.name}
                             </td>
                             <td className="px-3 py-2 num text-slate-700 dark:text-slate-300">{r.abs.toFixed(4)}</td>
-                            <td className="px-3 py-2 num font-bold text-slate-900 dark:text-slate-100">
-                              {Number.isFinite(r.eu)
-                                ? `${r.eu.toFixed(3)} EU/mL`
+                            <td className={`px-3 py-2 num font-bold ${Number.isFinite(rawNumericVal) && rawNumericVal < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                              {Number.isFinite(rawNumericVal)
+                                ? `${rawNumericVal.toFixed(3)} EU/mL`
                                 : '—'}
                             </td>
                             <td className="px-3 py-2 text-[11px] text-slate-500 dark:text-slate-400 num">
@@ -794,7 +801,7 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
                             <td className="px-3 py-2 text-right font-bold text-[10px] uppercase">
                               <span
                                 className={
-                                  isAbove || r.invalidInput || r.negativeEstimate
+                                  isAbove || r.invalidInput || r.negativeEstimate || r.analyticalStatus === 'BELOW_BLANK'
                                     ? 'text-rose-600 dark:text-rose-400 font-semibold'
                                     : 'text-emerald-700 dark:text-emerald-400 font-medium'
                                 }
@@ -886,7 +893,7 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
                         <td className="px-3 py-2 font-mono text-slate-700 dark:text-slate-300">
                           {Number.isFinite(k.r2) ? k.r2.toFixed(4) : (k.inputMode === 'direct_rate' ? 'Direct' : '—')}
                         </td>
-                        <td className="px-3 py-2 font-mono font-bold text-slate-900 dark:text-slate-100">
+                        <td className={`px-3 py-2 font-mono font-bold ${k.estimatedEu !== undefined && Number.isFinite(k.estimatedEu) && k.estimatedEu < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-slate-100'}`}>
                           {k.type === 'standard'
                             ? `${k.standardEu?.toFixed(3)} EU (Std)`
                             : k.estimatedEu !== undefined &&
@@ -897,14 +904,22 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
                         <td className="px-3 py-2 text-right font-medium text-[10px] uppercase">
                           <span
                             className={
-                              isHigh
+                              k.type === 'sample' && (k.analyticalStatus === 'BELOW_BLANK' || (k.estimatedEu !== undefined && k.estimatedEu < 0))
+                                ? 'text-rose-600 dark:text-rose-400 font-semibold'
+                                : isHigh
                                 ? 'text-emerald-700 dark:text-emerald-400 font-semibold'
                                 : isBase
                                 ? 'text-slate-500 dark:text-slate-400 font-normal'
                                 : 'text-indigo-700 dark:text-indigo-400 font-medium'
                             }
                           >
-                            {isHigh
+                            {k.type === 'sample' && k.analyticalStatus === 'BELOW_BLANK'
+                              ? 'Below blank (< LOD)'
+                              : k.type === 'sample' && k.estimatedEu !== undefined && k.estimatedEu < 0
+                              ? 'Negative extrapolation'
+                              : k.type === 'sample' && k.outOfRange
+                              ? 'Extrapolated (> range)'
+                              : isHigh
                               ? 'High Velocity'
                               : isBase
                               ? 'Baseline'

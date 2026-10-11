@@ -826,6 +826,24 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
           {/* SECTION 1: Matched Cross-Assay Pairs */}
           {comparisons.length > 0 && (
             <div className="space-y-2">
+              {comparisons.some(
+                (c) =>
+                  c.isEligibleForQuantitativeStats &&
+                  ((c.coagEu !== null && c.coagEu <= 0) ||
+                    (c.poEu !== null && c.poEu <= 0) ||
+                    (Number.isFinite(c.coagRawEu) && c.coagRawEu <= 0) ||
+                    (Number.isFinite(c.poRawEu) && c.poRawEu <= 0) ||
+                    c.coagAnalyticalStatus === 'BELOW_BLANK' ||
+                    (c.poAnalyticalStatus && c.poAnalyticalStatus === 'BELOW_BLANK') ||
+                    c.concordance === 'not_evaluable' ||
+                    c.concordance === 'non_quantifiable')
+              ) && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 rounded-lg flex items-center gap-2 text-xs text-amber-900 dark:text-amber-100 font-bold">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Diagnostic only: includes non-quantifiable (negative / below-blank) estimates. Do not interpret agreement statistics.</span>
+                </div>
+              )}
+
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 Cross-Assay Matched Pairs ({comparisons.length} sample pairs sharing Sample ID)
@@ -870,38 +888,44 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
 
                           {/* Coagulation */}
                           <td className="px-3 py-2.5 text-center font-mono border-l border-slate-200 dark:border-slate-800">
-                            {cmp.coagEu !== null && Number.isFinite(cmp.coagEu) ? (
-                              <div>
-                                <span className="font-bold text-indigo-900 dark:text-indigo-300 text-sm">
-                                  {cmp.coagEu.toFixed(3)}
-                                </span>
-                                <span className="text-[10px] text-slate-400 block">
-                                  ({Number.isFinite(cmp.coagAbs) ? cmp.coagAbs.toFixed(3) : '—'} OD)
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-amber-600 font-semibold text-[11px]">
-                                {cmp.coagStatus || '< LOD'}
+                            <div>
+                              <span className={`font-bold text-sm ${((cmp.coagEu !== null && cmp.coagEu < 0) || (Number.isFinite(cmp.coagRawEu) && cmp.coagRawEu < 0)) ? 'text-rose-600 dark:text-rose-400' : 'text-indigo-900 dark:text-indigo-300'}`}>
+                                {cmp.coagEu !== null && Number.isFinite(cmp.coagEu)
+                                  ? cmp.coagEu.toFixed(3)
+                                  : Number.isFinite(cmp.coagRawEu)
+                                  ? cmp.coagRawEu.toFixed(3)
+                                  : '—'}
                               </span>
-                            )}
+                              <span className="text-[10px] text-slate-400 block">
+                                ({Number.isFinite(cmp.coagAbs) ? cmp.coagAbs.toFixed(3) : '—'} OD)
+                              </span>
+                              {cmp.coagAnalyticalStatus !== 'WITHIN_RANGE' && (
+                                <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold block">
+                                  {cmp.coagAnalyticalStatus === 'BELOW_BLANK' ? 'Below blank (< LOD)' : cmp.coagStatus || cmp.coagAnalyticalStatus}
+                                </span>
+                              )}
+                            </div>
                           </td>
 
                           {/* Phenoloxidase */}
                           <td className="px-3 py-2.5 text-center font-mono border-l border-slate-200 dark:border-slate-800">
-                            {cmp.poEu !== null && Number.isFinite(cmp.poEu) ? (
-                              <div>
-                                <span className="font-bold text-violet-900 dark:text-violet-300 text-sm">
-                                  {cmp.poEu.toFixed(3)}
-                                </span>
-                                <span className="text-[10px] text-slate-400 block">
-                                  ({Number.isFinite(cmp.poRate) ? cmp.poRate.toFixed(4) : '—'}/min)
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-amber-600 font-semibold text-[11px]">
-                                {cmp.poStatus || 'N/A'}
+                            <div>
+                              <span className={`font-bold text-sm ${((cmp.poEu !== null && cmp.poEu < 0) || (Number.isFinite(cmp.poRawEu) && cmp.poRawEu < 0)) ? 'text-rose-600 dark:text-rose-400' : 'text-violet-900 dark:text-violet-300'}`}>
+                                {cmp.poEu !== null && Number.isFinite(cmp.poEu)
+                                  ? cmp.poEu.toFixed(3)
+                                  : Number.isFinite(cmp.poRawEu)
+                                  ? cmp.poRawEu.toFixed(3)
+                                  : '—'}
                               </span>
-                            )}
+                              <span className="text-[10px] text-slate-400 block">
+                                ({Number.isFinite(cmp.poRate) ? cmp.poRate.toFixed(4) : '—'}/min)
+                              </span>
+                              {cmp.poAnalyticalStatus && cmp.poAnalyticalStatus !== 'WITHIN_RANGE' && (
+                                <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold block">
+                                  {cmp.poAnalyticalStatus === 'BELOW_BLANK' ? 'Below blank (< LOD)' : cmp.poStatus || cmp.poAnalyticalStatus}
+                                </span>
+                              )}
+                            </div>
                           </td>
 
                           {/* Absolute Difference */}
@@ -913,7 +937,7 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
 
                           {/* RPD */}
                           <td className="px-3 py-2.5 text-center font-mono font-bold">
-                            {cmp.rpd !== null && Number.isFinite(cmp.rpd) ? (
+                            {cmp.rpd !== null && Number.isFinite(cmp.rpd) && !isExcluded ? (
                               <span
                                 className={
                                   isHigh
@@ -926,7 +950,7 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
                                 {cmp.rpd.toFixed(1)}%
                               </span>
                             ) : (
-                              <span className="text-slate-400">—</span>
+                              <span className="text-slate-500 font-mono text-xs font-semibold">n/e</span>
                             )}
                           </td>
 
@@ -1005,13 +1029,18 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
                           <div className="text-right font-mono">
                             {c.result ? (
                               <>
-                                <span className="font-bold text-indigo-900 dark:text-indigo-300">
-                                  {c.result.reportedEu !== null && Number.isFinite(c.result.reportedEu)
-                                    ? `${(c.result.reportedEu * c.result.dilutionFactor).toFixed(3)} EU/mL`
+                                <span className={`font-bold block ${Number.isFinite(c.result.rawEu) && c.result.rawEu < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-indigo-900 dark:text-indigo-300'}`}>
+                                  {Number.isFinite(c.result.rawEu)
+                                    ? `${(c.result.rawEu * (c.result.dilutionFactor || 1)).toFixed(3)} EU/mL`
                                     : c.result.reportableText}
                                 </span>
+                                {c.result.analyticalStatus !== 'WITHIN_RANGE' && (
+                                  <span className="text-[10px] text-amber-600 block">
+                                    {c.result.analyticalStatus === 'BELOW_BLANK' ? 'Below blank (< LOD)' : c.result.reportableText}
+                                  </span>
+                                )}
                                 <span className="text-[10px] text-slate-400 block">
-                                  Not tested in PO
+                                  Coagulation only
                                 </span>
                               </>
                             ) : (
@@ -1043,13 +1072,18 @@ export const SampleEstimatorTab: React.FC<SampleEstimatorTabProps> = ({
                           <div className="text-right font-mono">
                             {p.result ? (
                               <>
-                                <span className="font-bold text-violet-900 dark:text-violet-300">
-                                  {p.result.reportedEu !== null && Number.isFinite(p.result.reportedEu)
-                                    ? `${p.result.reportedEu.toFixed(3)} EU/mL`
+                                <span className={`font-bold block ${p.result.estimatedEu !== undefined && Number.isFinite(p.result.estimatedEu) && p.result.estimatedEu < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-violet-900 dark:text-violet-300'}`}>
+                                  {p.result.estimatedEu !== undefined && Number.isFinite(p.result.estimatedEu)
+                                    ? `${p.result.estimatedEu.toFixed(3)} EU/mL`
                                     : p.result.reportableText}
                                 </span>
+                                {p.result.analyticalStatus && p.result.analyticalStatus !== 'WITHIN_RANGE' && (
+                                  <span className="text-[10px] text-amber-600 block">
+                                    {p.result.analyticalStatus === 'BELOW_BLANK' ? 'Below blank (< LOD)' : p.result.reportableText}
+                                  </span>
+                                )}
                                 <span className="text-[10px] text-slate-400 block">
-                                  Not tested in Coag
+                                  PO only
                                 </span>
                               </>
                             ) : (

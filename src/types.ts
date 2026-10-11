@@ -350,7 +350,7 @@ export interface AssayComparisonItem {
   isLowConcentration: boolean;
   lowConcentrationWarning?: string;
   agreement: 'AGREE' | 'DISAGREE' | 'EXCLUDED';
-  concordance: 'high' | 'moderate' | 'discordant' | 'non_quantifiable';
+  concordance: 'high' | 'moderate' | 'discordant' | 'not_evaluable' | 'non_quantifiable';
   comment: string;
 }
 
@@ -392,6 +392,10 @@ export interface BlandAltmanResult {
   trendR: number;
   trendPValue: number;
   hasProportionalBiasWarning: boolean;
+  hasNearConstantAxisWarning?: boolean;
+  nearConstantAxisWarning?: string;
+  isDiagnosticOnly?: boolean;
+  diagnosticWarning?: string;
   heteroscedasticityR: number;
   heteroscedasticityPValue: number;
   hasHeteroscedasticityWarning: boolean;
@@ -427,6 +431,8 @@ export interface AgreementAnalysisSummary {
   exploratoryRpdTier2: number;
   lowConcentrationCutoff: number;
   concordanceStatement: string;
+  isDiagnosticOnly?: boolean;
+  diagnosticWarning?: string;
 }
 
 
