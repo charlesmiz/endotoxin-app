@@ -32,6 +32,8 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { generateAnalyticalInterpretation } from '../utils/analyticalFallback';
+import { summarizeAgreement, formatConcordanceSummarySentence } from '../utils/agreementSummary';
+import { APP_VERSION_LABEL } from '../version';
 
 interface ValidationReportTabProps {
   runLabel: string;
@@ -334,17 +336,11 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
     }
 
     if (showCompareSection && (comparisons.length > 0 || (pairingSummary && pairingSummary.uniqueCount > 0))) {
-      const highCount = comparisons.filter((c) => c.concordance === 'high').length;
-      const meanRpd =
-        comparisons.length > 0
-          ? comparisons.reduce((acc, c) => acc + (c.rpd ?? 0), 0) / comparisons.length
-          : 0;
+      const summary = summarizeAgreement(comparisons);
       const countPrefix = pairingSummary
         ? `Dual-Assay Concordance: ${pairingSummary.uniqueCount} unique sample(s) evaluated (${pairingSummary.pairedCount} matched pair(s), ${pairingSummary.coagOnly.length} coag-only, ${pairingSummary.poOnly.length} PO-only)`
         : `Dual-Assay Concordance: ${comparisons.length} sample(s) cross-compared`;
-      segments.push(
-        `${countPrefix} with mean RPD of ${meanRpd.toFixed(1)}% (${highCount}/${comparisons.length} high concordance ≤15%).`
-      );
+      segments.push(formatConcordanceSummarySentence(summary, countPrefix));
     }
 
     return segments.join(' ');
@@ -649,7 +645,7 @@ export const ValidationReportTab: React.FC<ValidationReportTabProps> = ({
           </div>
           <div>
             <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Software Version</span>
-            <span className="font-semibold font-mono text-slate-800 dark:text-slate-200">v2.4.0 (Research Edition)</span>
+            <span className="font-semibold font-mono text-slate-800 dark:text-slate-200">{APP_VERSION_LABEL}</span>
           </div>
           <div>
             <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Evaluation Framework</span>

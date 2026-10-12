@@ -3,6 +3,7 @@ import { AssayComparisonItem, PairingSummary } from '../types';
 import {
   computeAgreementSummary,
 } from '../utils/math';
+import { summarizeAgreement } from '../utils/agreementSummary';
 import { MethodAgreementCharts } from './MethodAgreementCharts';
 import {
   GitCompare,
@@ -68,17 +69,13 @@ export const DualAssayComparisonSection: React.FC<DualAssayComparisonSectionProp
     );
   }
 
-  const highCount = comparisons.filter((c) => c.isEligibleForQuantitativeStats && c.concordance === 'high').length;
-  const modCount = comparisons.filter((c) => c.isEligibleForQuantitativeStats && c.concordance === 'moderate').length;
-  const discCount = comparisons.filter((c) => c.isEligibleForQuantitativeStats && c.concordance === 'discordant').length;
+  const agreement = summarizeAgreement(comparisons);
   const eligibleComparisons = comparisons.filter((c) => c.isEligibleForQuantitativeStats && c.rpd !== null);
   const lowConcCount = eligibleComparisons.filter((c) => c.isLowConcentration).length;
-  const avgRpd = eligibleComparisons.length > 0
-    ? eligibleComparisons.reduce((acc, c) => acc + (c.rpd ?? 0), 0) / eligibleComparisons.length
-    : NaN;
   const avgAbsDiff = eligibleComparisons.length > 0
     ? eligibleComparisons.reduce((acc, c) => acc + (c.absDiff ?? 0), 0) / eligibleComparisons.length
     : NaN;
+  const discCount = eligibleComparisons.filter((c) => c.concordance === 'discordant').length;
 
   return (
     <div className={`space-y-5 ${isPrintView ? 'avoid-break' : ''}`}>
@@ -276,10 +273,10 @@ export const DualAssayComparisonSection: React.FC<DualAssayComparisonSectionProp
             Matched / Eligible
           </div>
           <div className="text-lg font-bold text-slate-900 dark:text-slate-100 font-mono">
-            {eligibleComparisons.length} / {comparisons.length}
+            {agreement.eligibleCount} / {agreement.total}
           </div>
           <div className="text-[10px] text-slate-400">
-            {comparisons.length - eligibleComparisons.length} excluded
+            {agreement.excludedCount} excluded
           </div>
         </div>
 
@@ -300,7 +297,7 @@ export const DualAssayComparisonSection: React.FC<DualAssayComparisonSectionProp
             Mean RPD (Exploratory)
           </div>
           <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400 font-mono">
-            {Number.isFinite(avgRpd) ? `${avgRpd.toFixed(1)}%` : '—'}
+            {agreement.meanRpd !== null ? `${agreement.meanRpd.toFixed(1)}%` : '—'}
           </div>
           <div className="text-[10px] text-slate-400">
             Relative percentage diff
@@ -312,7 +309,7 @@ export const DualAssayComparisonSection: React.FC<DualAssayComparisonSectionProp
             Tier 1 Agreement (≤{tier1Rpd}%)
           </div>
           <div className="text-lg font-bold text-emerald-700 dark:text-emerald-300 font-mono">
-            {highCount} / {eligibleComparisons.length}
+            {agreement.highCount} / {agreement.eligibleCount}
           </div>
           <div className="text-[10px] text-slate-400">
             Study-defined criterion
@@ -324,7 +321,7 @@ export const DualAssayComparisonSection: React.FC<DualAssayComparisonSectionProp
             Discordant (&gt;{tier2Rpd}%)
           </div>
           <div className="text-lg font-bold text-rose-700 dark:text-rose-300 font-mono">
-            {discCount} / {eligibleComparisons.length}
+            {discCount} / {agreement.eligibleCount}
           </div>
           <div className="text-[10px] text-slate-400">
             Requires investigation

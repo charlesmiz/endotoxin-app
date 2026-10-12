@@ -7,6 +7,7 @@ import {
   AssayComparisonItem,
   PairingSummary,
 } from '../types';
+import { APP_VERSION_LABEL } from '../version';
 
 /**
  * RFC 4180-compliant CSV Parser.
@@ -243,7 +244,7 @@ export function formatCoagulationCsv(options: {
     wavelength = 540,
     threshold,
     thresholdBasis = 'Investigational Study Threshold',
-    softwareVersion = 'v2.4.0 (Research Edition)',
+    softwareVersion = APP_VERSION_LABEL,
   } = options;
 
   const now = new Date().toISOString();
@@ -382,7 +383,7 @@ export function formatKineticCsv(options: {
     experimentId = 'EXP-AM-2026-001',
     wavelength = 490,
     threshold,
-    softwareVersion = 'v2.4.0 (Research Edition)',
+    softwareVersion = APP_VERSION_LABEL,
   } = options;
 
   const now = new Date().toISOString();
@@ -481,7 +482,7 @@ export function formatComparisonCsv(options: {
     experimentId = 'EXP-AM-2026-001',
     coagWavelength = 540,
     poWavelength = 490,
-    softwareVersion = 'v2.4.0 (Research Edition)',
+    softwareVersion = APP_VERSION_LABEL,
   } = options;
 
   const now = new Date().toISOString();
