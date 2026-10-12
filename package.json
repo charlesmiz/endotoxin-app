@@ -1,7 +1,7 @@
 {
-  "name": "react-example",
+  "name": "endotoxin-assay-calibration-tool",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.5.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
