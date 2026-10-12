@@ -1,5 +1,25 @@
 # CHANGELOG — Archachatina marginata Dual-Assay Analysis Suite
 
+## [v2.5.0-research] — 2026-10-12
+
+### Method comparison
+- Samples are paired by name (or an optional Pair ID), never by row position. Samples measured in only one assay are listed as unpaired and are not counted in the statistics.
+- Added a pairing summary (unique, paired, coagulation-only, PO-only), duplicate-name detection and possible-typo warnings.
+- Pairs with a negative, below-blank or out-of-range estimate are excluded from the agreement statistics; their RPD is "not evaluable" and they can no longer be classed as Tier 1.
+- Added a near-constant-axis warning (difference-on-mean slope close to -2) and a diagnostic-only banner.
+- Fixed the direction of the Deming variance ratio lambda for lambda != 1 so that it follows the documented convention lambda = Var(error in x) / Var(error in y). Results at lambda = 1 are unchanged.
+- The executive summary now uses the same eligible-pair logic as the comparison section: mean RPD and the high-concordance count are computed over eligible pairs only, excluded pairs are reported, and "not evaluable" is shown when no pair is eligible.
+
+### Input tables
+- All input tables start blank; "Add row" no longer fills in values; row IDs use random identifiers.
+- Added a "points used in calibration" list and warnings for skipped rows and duplicate concentrations.
+
+### Verification, data and project
+- Added tests for pairing, blank defaults, the 11-standard PO calibration, the agreement rules and the executive summary, plus a benchmark test against an independent implementation (src/utils/verifyEngine.test.ts).
+- Added the data/ folder and research_scripts/verify_method_comparison.py.
+- The software version now comes from one constant (src/version.ts) and matches package.json; the app screen and CSV exports show v2.5.0.
+
+After editing, show me the first 40 lines of CHANGELOG.md.
 All notable analytical, statistical, UX, and architectural changes in this repository are documented below.
 
 ## [v2.4.0-research] — 2026-09-15
