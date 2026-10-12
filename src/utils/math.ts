@@ -1941,8 +1941,10 @@ export function computeDemingRegression(
 
     if (Math.abs(sxy) < 1e-12) return null;
 
+    // lam = Var(error in x) / Var(error in y); the classical formula uses delta = 1 / lam
+    const delta = 1 / lam;
     const b =
-      (syy - lam * sxx + Math.sqrt(Math.pow(syy - lam * sxx, 2) + 4 * lam * sxy * sxy)) /
+      (syy - delta * sxx + Math.sqrt(Math.pow(syy - delta * sxx, 2) + 4 * delta * sxy * sxy)) /
       (2 * sxy);
     const a = yM - b * xM;
 
